@@ -1,0 +1,68 @@
+{
+    "langauge_button": "Changer En FR",
+    "add_button": "Add",
+    "remove_button": "Remove",
+    "open_button": "Open",
+    "run_button": "Run",
+    "description_label": "No Description Available",
+    "option_label": "No Options Available",
+    "choice_label": "Do You Want To Select A Folder",
+    "depth_label": "Is Subfiltering Required Among Files/Folders Within It? (Be Mindful Of Large Quantities",
+    "functions": {
+
+        "undirected_set": {
+            "name": "Undirected Set",
+            "description": "TODO",
+            "checkboxes": ["Parse UCI", "Use Filter"],
+            "dropdowns": {
+                "Output": ["Union", "Difference", "Intersection"],
+                "Duplication": ["Any","Beyond Sheet", "Beyond File"]
+            },
+            "fields": ["Keys"]
+        },
+
+        "directed_set": {
+            "name": "Directed Set",
+            "description": "TODO",
+            "checkboxes": ["Parse UCI", "Use Filter"],
+            "dropdowns": {
+                "Output": ["Difference", "Intersection"]
+            },
+            "fields": ["Keys"]
+        },
+
+        "match_col": {
+            "name": "Match Column",
+            "description": "TODO",
+            "checkboxes": ["Parse UCI", "Use Filter"],
+            "dropdowns": {
+                "Output": ["Union", "Consistant", "InConsistant"],
+                "Aggregate": ["List","Sum", "Set", "Max", "Min"]
+            },
+            "fields": ["Keys", "Values"]
+        },
+
+        "upload_location": {
+            "name": "Upload Locations",
+            "description": "TODO",
+            "checkboxes": ["Clear Existing"]
+        },
+        "upload_disposition": {
+            "name": "Upload Disposition",
+            "description": "TODO",
+            "checkboxes": ["Clear Existing"]
+        },
+        "upload_event": {
+            "name": "Upload Events",
+            "description": "TODO",
+            "checkboxes": ["Clear Existing"]
+        },
+        "upload_trigger": {
+            "name": "Upload Triggers",
+            "description": "TODO",
+            "dropdowns": {
+                "Trigger": ["Citizenship", "Deceased", "Departure"]
+            }
+        }
+    }
+}

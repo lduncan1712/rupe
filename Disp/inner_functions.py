@@ -3,6 +3,7 @@ import global_attributes as ga
 from typing import Tuple
 import re
 import file_support as fs
+import db_support as ds
 import numpy as np
 
 stage = 0
@@ -79,13 +80,15 @@ UCI_PARSE = np.frompyfunc(evaluate_uci,1,1)
 #----------------------------------------------------------
 
 
-def undirected_set(parse:bool, filter:bool, output:int, duplication:int, keys:str):
+def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, keys:str):
 
     #Storing
     internal = defaultdict(lambda: defaultdict(int))
 
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_row_files(filter=filter, intended=[split_indexs(keys)]):
+    for file, sheet, data in ga.app.iterate_selected_data(use_filter=filter, 
+                                                          intended_names=[split_indexs(keys)],
+                                                          intended_types=[('KEY', object)]):
         if parse:
             data = UCI_PARSE(data)
         for row in data:
@@ -107,7 +110,7 @@ def undirected_set(parse:bool, filter:bool, output:int, duplication:int, keys:st
 
         #Output
         if (output == 0) or (output == 1 and duplicate) or (output == 2 and not duplicate):
-            aggregates.append([value, total_count, "/".join(subfiles.keys())])
+            aggregates.append([value, total_count, ";".join(subfiles.keys())])
 
     #Report
     fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("UNDIRECTED"), columns=["KEYS","COUNT","VALUES"])
@@ -142,7 +145,7 @@ def directed_set(parse:bool, filter:bool, output:int, keys:str):
         aggregates = []
         for value, subfiles in internal.items():
             if (len(subfiles) == 0 and output == 0) or (len(subfiles) > 1 and output == 1):
-                aggregates.append([value, '/'.join(subfiles)])
+                aggregates.append([value, ';'.join(subfiles)])
 
         #REPORT
         fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("DIRECTED"), columns=["KEYS", "COUNT", "VALUES"])
@@ -175,7 +178,7 @@ def match_col(parse:bool, filter:bool, output:int, aggregate:int, keys:str, valu
             if total_count == 1:
                 aggregates.append([key, values[0], 1])
             elif aggregate in [0,2]:
-                aggregates.append([key, total_count, '/'.join(values)])
+                aggregates.append([key, total_count, ';'.join(values)])
             else:
                 if aggregate == 1:
                     aggregates.append([key,  total_count, sum(values)])
@@ -186,5 +189,23 @@ def match_col(parse:bool, filter:bool, output:int, aggregate:int, keys:str, valu
 
     fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("MATCH"), columns=["KEY","COUNT","VALUE"])
 
-def upload_location():
-    pass
+def upload_triggers(trigger):
+    
+    intended = [['UCI']]
+    if trigger == 0:
+        intended.append(['Citizenship_Date'])
+    elif trigger == 1:
+        intended.append(['Decreased_Date'])
+    elif trigger == 2:
+        intended.append(['Departure_Date'])
+
+    for _, _, data in ga.app.iterate_selected_data(filter=False, intended_names=intended,
+                                                        dtype=[
+                                                            ()
+                                                        ]):
+
+
+        data[:, 1] = np.array([np.datetime64(d) for d in data[:, 1]])
+        data = np.unique(data, axis=0)
+        data = np.insert(data, data.shape[1], trigger, axis=1)
+        ds.upload_triggers(data=fs.numpy_to_tuple(data))

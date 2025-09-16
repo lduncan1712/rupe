@@ -57,7 +57,7 @@
             "description": "TODO",
             "checkboxes": ["Clear Existing"]
         },
-        "upload_trigger": {
+        "upload_triggers": {
             "name": "Upload Triggers",
             "description": "TODO",
             "dropdowns": {

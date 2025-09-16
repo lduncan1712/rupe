@@ -29,6 +29,7 @@ class FunctionApp:
         ga.file_links =      {}
         ga.sheet_links =     {}
         ga.sheet_names =     {}
+        ga.callback = self.show_message
 
         self.text =          {}
         self.node_counter =    0
@@ -402,50 +403,43 @@ class FunctionApp:
     #---------------------------------------------------------------
     #---------------------------------------------------------------
     #---------------------------------------------------------------
-
-    def get_selected_excel(self):
-
-        selected_ids = {}
-        for selected_sheet in self.select_set['EXCEL-SHEET']:
-            file = ga.sheet_links[selected_sheet]
-            if file in selected_ids:
-                selected_ids[file].append(selected_sheet)
-            else:
-                selected_ids[file] = [selected_sheet]
-        return selected_ids
     
 
     def get_selected_type(self, type:str):
-        return self.select_set[type]
+        if type == "EXCEL":
+            selected_ids = {}
+            for selected_sheet in self.select_set['EXCEL-SHEET']:
+                file = ga.sheet_links[selected_sheet]
+                if file in selected_ids:
+                    selected_ids[file].append(selected_sheet)
+                else:
+                    selected_ids[file] = [selected_sheet]
+            return selected_ids
+        else:
+            return self.select_set[type]
     
 
+    def iterate_selected_data(self, use_filter:bool, intended_names:List[List[str]], intended_types:List):
 
-    def iterate_selected_row_files(self, filter:bool, intended:List[List[str]]):
-
-        #Store Files To Run
         self.files_to_run = self.select_counts["EXCEL-SHEET"] + self.select_counts["CSV"]
 
-
-        #EXCEL FILES
-        for excel_key, sheet_key, iterator in fs.iterate_excel_files(selected=self.get_selected_excel(),
-                                                                  filter=filter,
-                                                                  intended=intended,
-                                                                  cb=self.show_message):
-            self.start_file_progress(total=next(iterator))
-            for batch, batch_rows in iterator:
-                self.update_file_progress(n=batch_rows)
-                yield excel_key, sheet_key, batch
-
-        #CSV FILES
-        for csv_key, _, iterator in fs.iterate_csv_files(selected=self.get_selected_type(type="CSV"),
-                                                      intended=intended,
-                                                      cb=self.show_message):
-            
-            self.start_file_progress(total=next(iterator))
-            for batch, batch_rows in iterator:
-                self.update_file_progress(n=batch_rows)
-                yield csv_key, csv_key, batch
-
+        for key, sub_key, iterator in fs.iterate_selected_files(excel_keys=self.get_selected_type(type="EXCEL"),
+                                                                csv_keys=self.get_selected_type(type="CSV"),
+                                                                intended_names=intended_names,
+                                                                intended_types=intended_types,
+                                                                use_filter=use_filter):
+            if iterator is None:
+                self.show_message("Selected File: " + ga.file_links[key] + "-" + ga.sheet_links[sub_key] + " Doesnt Match Format. Skipping")
+                self.start_file_progress(total=0)
+            else:
+                self.start_file_progress(total=next(iterator))
+                for batch, batch_rows in iterator:
+                    if batch is None:
+                        self.show_message("Selected File: " + ga.file_links[key] + "-" + ga.sheet_links[sub_key] + " Has Invalid Data Type. Skipping Remaining")
+                        break
+                    else:
+                        self.update_file_progress(n=batch_rows)
+                        yield key, sub_key, batch
 
 if __name__ == "__main__":
     root = tk.Tk()

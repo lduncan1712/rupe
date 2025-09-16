@@ -1,3 +1,43 @@
+CREATE TABLE trigger_types(
+    id          LONG PRIMARY KEY,
+    label       TEXT(50)
+);
+
+INSERT INTO trigger_types (id, label) VALUES (0, 'Citizenship');
+INSERT INTO trigger_types (id, label) VALUES (1, 'Deceased');
+INSERT INTO trigger_types (id, label) VALUES (2, 'Departure');
+
+
+CREATE TABLE temp_triggers(
+    uci LONG,
+    trigger_date DATE,
+    trigger_type LONG
+);
+
+CREATE TABLE triggers (
+    uci          LONG,
+    trigger_date DATE,
+    trigger_type LONG,
+    PRIMARY KEY (uci, trigger_date, trigger_type),
+    CONSTRAINT triggers_type FOREIGN KEY (trigger_type) REFERENCES trigger_types(id)
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 CREATE TABLE offices(
     id         LONG PRIMARY KEY,
     [label]    TEXT(50)
@@ -21,26 +61,6 @@ CREATE TABLE files(
     CONSTRAINT files_office FOREIGN KEY (office) REFERENCES offices(id)
 );
 
-
-
-
-
-
-CREATE TABLE trigger_types(
-    id          LONG PRIMARY KEY,
-    label       TEXT(50)
-);
-
-INSERT INTO trigger_types(id, label)
-VALUES (1, 'Citizenship'), (2, 'Deceased'), (3, 'Departure');
-
-CREATE TABLE triggers(
-    uci                 LONG,
-    trigger_date        DATE,
-    trigger_type        INT
-    PRIMARY KEY (uci, trigger_date, trigger_type),
-    CONSTRAINT triggers_type FOREIGN KEY (trigger_type) REFERENCES trigger_types(id)
-);
 
 CREATE TABLE event_types(
     id            LONG PRIMARY KEY,

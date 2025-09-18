@@ -1,11 +1,21 @@
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, Iterator
 import win32com.client, os, gc, json
 from typing import Tuple
 from datetime import datetime, date
 import csv
 import numpy as np
-import global_attributes as ga
+from global_structures import *
 import pywintypes
+
+
+
+
+from numpy.typing import NDArray
+from dataclasses import dataclass
+
+
+# ----------------------------------------------
+
 
 def is_valid_file(path:str) -> bool:
     return os.path.isfile(path)
@@ -95,6 +105,14 @@ def open_file(type: str, path: str, app: Any, read: bool) -> Any:
         raise ValueError("Invalid Type" + type)
     return file  
 
+def open_subfile(type: str, file: Any, subfile: Any) -> Any:
+    if type == "EXCEL":
+        subfile = file.Sheets(subfile)
+    else:
+        raise ValueError ("Invalid Type" + type)
+    
+    return subfile
+
 def open_file_generic(path:str):
      os.startfile(path)
 
@@ -134,202 +152,298 @@ def close_application(type: str, app: Any) -> None:
         raise ValueError("Invalid Type: " + type)
     del app
     gc.collect()
+
 #--------------------------------------------------------
 
 
-BATCH_SIZE = 10000
+BATCH_SIZE = 100000
 
 
-def iterate_selected_files(excel_keys:dict, csv_keys:list, intended_names:list[list[str]], intended_types:list, use_filter: bool = False):
+def iterate_sheet(sheet:Any, format:Format) -> File:
 
-    for excel_key, sheet_keys in excel_keys.items():
-        excel_name = ga.file_links[excel_key]
-        wb = open_file(type="EXCEL", path=excel_name, app=ga.applications["EXCEL"], read=True)
+    has_table = sheet.listObjects.Count > 0
 
-        for sheet_key in sheet_keys:
-            sheet_name = ga.sheet_names[sheet_key]
-            ws = wb.Sheets(sheet_name)
-            yield excel_key, sheet_key, iterate_excel_sheet(ws=ws, intended_names=intended_names, intended_types=intended_types, use_filter=use_filter)
-        del ws
-        close_file(type="EXCEL", file=wb)
-        del wb
-        gc.collect()
-
-    for csv_key in csv_keys:
-        csv_name = ga.file_links[csv_key]
-        csv = open_file(type="CSV", path=csv_name, app=ga.applications["CSV"], read=True)
-
-        yield csv_key, csv_key, iterate_csv_rows
-
-def iterate_excel_sheet(ws:Any, intended_names:list[list[str]], intended_types:list, use_filter: bool = False):
-    print("ITERATING SHEET")
-    if ws.listObjects.Count > 0:
-        table = ws.ListObjects(1)
-        found_names = [c for c in table.HeaderRowRange.Value[0]]
-        column_indexs = enforce_file_schema(found_names=found_names, intended_names=intended_names)
-        used = table.DataBodyRange
-        del table
-        if use_filter:
-            iterater = iterate_excel_areas(column_indexs=column_indexs, intended_types=intended_types, areas=used.SpecialCells(12))
+    if has_table:
+        table = sheet.ListObjects(1)
+        names = [c for c in table.HeaderRowRange.Value[0]]
+        if format.use_filter:
+            used = table.DataBodyRange.SpecialCells(12)
         else:
-            iterater = iterate_excel_range(column_indexs=column_indexs, intended_types=intended_types, rng=used)
+            used = table.DataBodyRange
+    #Iterate Cell Range
     else:
-        used = ws.UsedRange
-        found_names = list(used.Rows(1).Cells.Value[0])
-        column_indexs = enforce_file_schema(found_names=found_names, intended_names=intended_names)
-        used = ws.Range(ws.Cells(used.Row + 1, used.Column), ws.Cells(used.Row + used.Rows.Count - 1, used.Column + used.Columns.Count - 1))
-        iterater = iterate_excel_range(column_indexs=column_indexs, intended_types=intended_types, rng=used)
+        used = sheet.UsedRange
+        names = list(used.Rows(1).Cells.Value[0])
+        used = sheet.Range(sheet.Cells(used.Row + 1, used.Column), 
+                           sheet.Cells(used.Row + used.Rows.Count - 1, used.Column + used.Columns.Count - 1))
+  
 
-    if column_indexs is None:
-        print("NONE 12")
-        iterator = None
+    #Validate Schema
+    indexs,valid = validate_schema(found_names=names, format=format)
 
-    yield from iterater
-    del used
-    gc.collect()
+    rows = get_row_counts(type="EXCEL", data=used)
 
+    #Iterate
+    if has_table and format.use_filter:
+        iterator = iterate_areas(rng=used, intended_indexs=indexs, format=format)
+    else:
+        iterator = iterate_range(rng=used, intended_indexs=indexs, format=format)
 
+    return File(total=rows, batches=iterator, valid=valid)
 
+def iterate_range(rng:Any, intended_indexs:list[int], format:Format, offset:int = 0) -> Iterator[BatchData]:
 
-def enforce_file_schema(found_names:list, intended_names:list[list[str]]) -> Optional[list[int]]:
-
-    if intended_names == [] or any(inner == [""] for inner in intended_names):
-        return None
-    
-    kept_indexs = []
-
-    for group in intended_names:
-        if len(group) == 1 and group[0].isdigit():
-            c = int(group[0])
-            if c >= 0 and c < len(found_names):
-                kept_indexs.append(c)
-            else:
-                return None
-        else:    
-            found_in_group = [found_names.index(x) for x in found_names if x in group]
-            if len(found_in_group) == 1:
-                kept_indexs.append(found_in_group[0])
-            else:
-                return None
-    return kept_indexs
-
-def enforce_data_extraction(intended_types:list, data:Any, use_excel: bool = False):
-    
-    for i, (name,t) in enumerate(intended_types):
-        col_type = data[:, i].dtype
-        match = np.issubdtype(col_type, np.dtype(t))
-        if not match:
-            if use_excel and np.dtype(t) == np.int32:
-                if np.issubdtype(col_type, np.floating):
-                    if np.all(np.modf(data[:,i] == 0)):
-                        data[:, i] = data[:,i].astype(np.int32)
-                        continue
-            print("NONE 13")
-            return None
-    return data
-
-def iterate_excel_range(column_indexs:list[int], intended_types:list, rng:range):
-
-    print("ITERATING RANGE:" + rng.Address)
-
-    #Get The Bounds
+    #Size
     n_rows = rng.Rows.Count
     r_first = rng.Row
     c_first = rng.Column
-    c_last = c_first + rng.Columns.Count - 1
     ws = rng.Worksheet
-
-    #Return Size
-    yield n_rows
 
     #Create Batch Ranges
     for s_off in range(0, n_rows, BATCH_SIZE):
         e_off = min(s_off + BATCH_SIZE - 1, n_rows - 1)
         r_start = s_off + r_first
         r_end = r_first + e_off
-        r_totals = r_end - r_start + 1
+        r_totals = r_end - r_start + 1 + offset
 
         np_columns = []
 
-        #Join Columns
-        for col_id, (name, dtype) in zip(column_indexs, intended_types):
-            print(dtype)
+        #Add Columns
+        for col_id, (name, dtype) in zip(intended_indexs, format.intended_types):
             batch_column = ws.Range(ws.Cells(r_start, c_first+col_id), ws.Cells(r_end, c_first+col_id))
             np_columns.append(np.array(batch_column.Value, dtype=dtype).reshape(-1))
 
-        #Validate Values
-        values = enforce_data_extraction(intended_types=intended_types, data=np.column_stack(np_columns), use_excel=True)
+        #Join Into Array
+        data = np.column_stack(np_columns)
+
+        valid = validate_data(intended_types=format.intended_types, data=data, is_excel=True)
+
+        yield BatchData(data=data, rows=r_totals, valid=valid)
         
-        yield values, r_totals
-        del values, ws
+def iterate_areas(rng:Any, intended_indexs:list[int], format:Format) -> Iterator[BatchData]:
 
-def iterate_excel_areas(column_indexs:list[int], intended_types:list, areas:range):
+    #Size
+    ws = rng.Worksheet
+    r_first = rng.Areas(1).Row
+    next_empty = r_first
 
-    ws = areas.Worksheet
-    r_first = areas.Areas(1).Row
-    a_last = areas.Areas(areas.Areas.Count)
-    r_last = a_last.Row + a_last.Rows.Count - 1
-    c_first = areas.Areas(1).Column
-    c_last = a_last.Column + a_last.Columns.Count - 1
-
-    yield r_last - r_first + 1
-
-    for area in areas.Areas:
-        iter = iterate_excel_range(column_indexs=column_indexs, intended_types=intended_types, rng=area)
-        next(iter)
-        yield from iter
-
-def iterate_csv_file(csv, intended_names:list[list[str]], intended_types:list):
+    for area in rng.Areas:
+        offset = area.Row - next_empty
+        next_empty = area.Row + area.Rows.Count - 1
+        #TODO: Empty Columns In Area Can Be Dropped, Should Flag
+        yield from iterate_range(rng=area, intended_indexs=intended_indexs, format=format, offset=offset)
 
 
-    found_names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
 
-    column_indexs = enforce_file_schema(found_names=found_names, intended_names=intended_names)
 
-    iterater = iterate_csv_rows(csv=csv, column_indexs=column_indexs, intended_types=intended_types)
 
-    if column_indexs is None:
-        iterater = None
+def iterate_csv(csv:Any, format:Format) -> File:
+    
+    names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
+    indexs, valid = validate_schema()
+    iterator = iterate_rows(csv=csv, intended_indexs=indexs)
 
-    yield from iterater
+    rows = get_row_counts(type="CSV", data=csv)
 
-def iterate_csv_rows(csv, column_indexs:list[int], intended_types:list):
+    return File(total=rows, data=iterator, valid=valid)
 
+
+
+def iterate_rows(core:FileCore, format:FileFormat) -> Iterator[Batch]:
+    
     rows = []
     r_cumulative = 0
     r_total = sum(1 for _ in csv)
     yield r_total
+
+    temp_intended = intended_types[0][1] if len(intended_types) == 1 else temp_intended
 
     csv.seek(0)
     next(csv)
 
     for line in csv:
         row = line.rstrip("\n").split(",")
-        row = [row[i] for i in column_indexs]
+        row = [row[i] for i in intended_indexs]
         rows.append(row)
         r_cumulative += 1
 
         if r_cumulative == BATCH_SIZE:
-            yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtypes=intended_types), use_excel=False), BATCH_SIZE
+            yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtypes=temp_intended), use_excel=False), BATCH_SIZE
             rows = []
             r_cumulative = 0
 
     if not r_cumulative == 0:
-        yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtype=intended_types), use_excel=False), r_cumulative
+        yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtype=temp_intended), use_excel=False), r_cumulative
         rows = []
         r_cumulative = 0
 
 
 
 
+def validate_schema(found_names:list[str], format:Format) -> Tuple[list[int], bool]:
+    kept_indexs = []
+    for group in format.intended_names:
+        if len(group) == 1 and group[0].isdigit():
+            c = int(group[0])
+            if c >= 0 and c < len(found_names):
+                kept_indexs.append(c)
+            else:
+                return kept_indexs, False
+        else:    
+            found_in_group = [found_names.index(x) for x in found_names if x in group]
+            if len(found_in_group) == 1:
+                kept_indexs.append(found_in_group[0])
+            else:
+                return kept_indexs, False
+    return kept_indexs, True
+
+def validate_data(format:Format, data:NDArray, is_excel:bool=False) -> bool:
+    for i, (n, t) in enumerate(format.intended_types):
+        col_type = data[:, i].dtype
+        intended_type = np.dtype(t)
+        match = np.issubdtype(col_type, intended_type)
+        if not match:
+            #But Its Excel, Its Intended To Be Integer, But Is Actually Floating
+            if is_excel and np.issubdtype(intended_type, np.integer) and np.issubdtype(col_type, np.floating):
+                if np.all(np.modf(data[:,i] == 0)):
+                    data[:, i] = data[:,i].astype(np.int32)
+                else:
+                    return False
+            else:
+                return False
+    return True
 
 
-def create_csv_output(data:Tuple, file_name:str, columns:list) -> None:
 
-    if file_name is None:
-        return
 
-    with open(file_name, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(columns)
-        writer.writerows(data)                
+def get_row_counts(type:str, data:Any) -> int:
+    if type == "EXCEL":
+        areas = data.Areas.Count
+        if areas > 1:
+            r_top = data.Areas(1).Row
+            r_bot = data.Areas(areas).Row + data.Areas(areas).Rows.Count - 1
+            return r_bot - r_top + 1
+        else:
+            return data.Rows.Count
+    elif type == "CSV":
+        rows = sum(1 for _ in data)
+        data.seek(0)
+        next(data)
+        return rows
+    else:
+        ValueError("Invalid Type Entered")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def iterate_excel_areas(column_indexs:list[int], intended_types:list, areas:range):
+#     pass
+    
+
+# def iterate_csv_file(csv, intended_names:list[list[str]], intended_types:list):
+
+
+#     found_names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
+
+#     column_indexs = enforce_file_schema(found_names=found_names, intended_names=intended_names)
+
+#     iterater = iterate_csv_rows(csv=csv, column_indexs=column_indexs, intended_types=intended_types)
+
+#     if column_indexs is None:
+#         iterater = None
+
+#     yield from iterater
+
+# def iterate_csv_rows(csv, column_indexs:list[int], intended_types:list):
+
+#     rows = []
+#     r_cumulative = 0
+#     r_total = sum(1 for _ in csv)
+#     yield r_total
+
+#     temp_intended = intended_types[0][1] if len(intended_types) == 1 else temp_intended
+
+#     csv.seek(0)
+#     next(csv)
+
+#     for line in csv:
+#         row = line.rstrip("\n").split(",")
+#         row = [row[i] for i in column_indexs]
+#         rows.append(row)
+#         r_cumulative += 1
+
+#         if r_cumulative == BATCH_SIZE:
+#             yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtypes=temp_intended), use_excel=False), BATCH_SIZE
+#             rows = []
+#             r_cumulative = 0
+
+#     if not r_cumulative == 0:
+#         yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtype=temp_intended), use_excel=False), r_cumulative
+#         rows = []
+#         r_cumulative = 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def create_csv_output(data:Tuple, file_name:str, columns:list) -> None:
+
+#     if file_name is None:
+#         return
+
+#     with open(file_name, "w", newline="", encoding="utf-8") as f:
+#         writer = csv.writer(f)
+#         writer.writerow(columns)
+#         writer.writerows(data)                

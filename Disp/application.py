@@ -2,18 +2,26 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 
+from global_structures import *
+
+
 from TEMP_CheckboxTreeView import CheckboxTreeview
 #from ttkwidgets import CheckboxTreeview
+
+
 from typing import Any, List, Callable
 import gc
 import file_support as fs
 import db_support as ds
+import inner_functions 
 from inner_functions import *
-import global_attributes as ga
+
+
 
 
 keys = ['FOLDER', 'EXCEL', 'WORD', 'PDF', 'CSV', 'EXCEL-SHEET']
 file_keys = ['EXCEL','WORD','PDF', 'CSV']
+app = None
 
 class FunctionApp:
 
@@ -24,12 +32,10 @@ class FunctionApp:
         self.item_set =   {k: set() for k in keys}
         self.select_set = {k: set() for k in keys}
 
-
-        ga.applications = {key: fs.open_application(key) for key in file_keys}
-        ga.file_links =      {}
-        ga.sheet_links =     {}
-        ga.sheet_names =     {}
-        ga.callback = self.show_message
+        self.applications = {key: fs.open_application(key) for key in file_keys}
+        self.file_links =      {}
+        self.sheet_links =     {}
+        self.sheet_names =     {}
 
         self.text =          {}
         self.node_counter =    0
@@ -249,18 +255,18 @@ class FunctionApp:
         self.item_counts[tag] += 1
         self.item_set[tag].add(n)
         if tag in file_keys:
-            ga.file_links[n] = fullPath
+            self.file_links[n] = fullPath
         if tag == "EXCEL":
             self.create_subnodes(path=fullPath, tag="EXCEL", parent=n)
         return n
     
     def create_subnodes(self, path:str, tag:str, parent:Any) -> None:
-        file = fs.open_file(type=tag, path=path, app=ga.applications[tag], read=True)
+        file = fs.open_file(type=tag, path=path, app=self.applications[tag], read=True)
         subitems = fs.get_subfiles(type=tag, file=file)
         for item in subitems:
             n = self.create_node(name=item, tag='EXCEL-SHEET', parent=parent, fullPath=path)
-            ga.sheet_links[n] = parent
-            ga.sheet_names[n] = item
+            self.sheet_links[n] = parent
+            self.sheet_names[n] = item
         fs.close_file(type=tag, file=file)
         del file
 
@@ -281,14 +287,27 @@ class FunctionApp:
             self.item_set[tag[0]].remove(node)
             self.right_tree.delete(node)
             if tag in file_keys:
-                ga.file_links.pop(node)
+                self.file_links.pop(node)
             elif tag == "EXCEL-SHEET":
-                ga.sheet_links.pop(node)
-                ga.sheet_names.pop(node)
+                self.sheet_links.pop(node)
+                self.sheet_names.pop(node)
     
     def get_next_node_id(self):
         self.node_counter += 1
         return self.node_counter
+
+    def get_selected_type(self, type:str):
+        if type == "EXCEL":
+            selected_ids = {}
+            for selected_sheet in self.select_set['EXCEL-SHEET']:
+                file = self.sheet_links[selected_sheet]
+                if file in selected_ids:
+                    selected_ids[file].append(selected_sheet)
+                else:
+                    selected_ids[file] = [selected_sheet]
+            return selected_ids
+        else:
+            return self.select_set[type]
 
     #-----------------------------------------------------------------
     #-----------------------------------------------------------------
@@ -326,32 +345,13 @@ class FunctionApp:
             fullPath = '/'.join(parts)
             fs.open_file_generic(fullPath)
 
-    def run_function(self):
-        selected = self.left_tree.selection()
-        if not selected: return
-        function_key = self.left_tree.item(selected[0], "tags")[0]
-        dropdown_values =     [choices.index(var.get()) for label, (var, choices) in self.dropdowns.items()]
-        field_values =        [entry.get() for field, entry in self.fields.items()]
-        checkbox_states =     [var.get() for option, var in self.checkboxes.items()]
-        combined_paramaters = [*checkbox_states, *dropdown_values, *field_values]
-        self.files_to_run =   0
-        self.files_run =      0
-        self.rows_to_run =    0
-        self.rows_run =       0
-
-        self.progress["value"] = 5
-        self.update_label(text="...")
-        globals()[function_key](*combined_paramaters)
-        self.progress["value"] = 100
-        self.update_label(text="Complete")   
-
     def on_closing(self):
         for key in file_keys:
-            app = ga.applications.pop(key, None)
+            app = self.applications.pop(key, None)
             fs.close_application(type=key, app=app)
             del app
         gc.collect()
-        ga.applications = None
+        self.applications = None
         root.destroy()
         ds.close_connection()
 
@@ -379,9 +379,33 @@ class FunctionApp:
         else:
             return path
 
-    #---------------------------------------------------------------
-    #---------------------------------------------------------------
-    #---------------------------------------------------------------
+    #-----------------------------------------------------------------
+    #-----------------------------------------------------------------
+    #-----------------------------------------------------------------
+
+
+
+
+
+    def run_function(self):
+        selected = self.left_tree.selection()
+        if not selected: return
+        function_key = self.left_tree.item(selected[0], "tags")[0]
+        
+        dropdown_values =     [choices.index(var.get()) for label, (var, choices) in self.dropdowns.items()]
+        field_values =        [entry.get() for field, entry in self.fields.items()]
+        checkbox_states =     [var.get() for option, var in self.checkboxes.items()]
+        combined_paramaters = [*checkbox_states, *dropdown_values, *field_values]
+        self.files_to_run =   0
+        self.files_run =      0
+        self.rows_to_run =    0
+        self.rows_run =       0
+
+        self.progress["value"] = 0
+        self.update_label(text="...")
+        globals()[function_key](*combined_paramaters)
+        self.progress["value"] = 100
+        self.update_label(text="Complete")   
 
     def start_file_progress(self, total:int):
         self.files_run += 1
@@ -399,51 +423,99 @@ class FunctionApp:
         self.progress_label.config(text=text)
         self.progress_label.update_idletasks()
 
+    def show_file_message(self, file:File, text:str):
 
-    #---------------------------------------------------------------
-    #---------------------------------------------------------------
-    #---------------------------------------------------------------
-    
+        file_name = self.file_links[file.file]
+        sub_name = (self.sheet_names[file.subfile] if file.subfile in self.sheet_names else "")
 
-    def get_selected_type(self, type:str):
-        if type == "EXCEL":
-            selected_ids = {}
-            for selected_sheet in self.select_set['EXCEL-SHEET']:
-                file = ga.sheet_links[selected_sheet]
-                if file in selected_ids:
-                    selected_ids[file].append(selected_sheet)
-                else:
-                    selected_ids[file] = [selected_sheet]
-            return selected_ids
-        else:
-            return self.select_set[type]
-    
+        self.show_message("Selected File: " + file_name + "-" + sub_name + "  " + text)
 
-    def iterate_selected_data(self, use_filter:bool, intended_names:List[List[str]], intended_types:List):
+    def updating_row_iteration(self, format:Format) -> Iterator[Tuple[int, int, NDArray[Any]]]:
 
         self.files_to_run = self.select_counts["EXCEL-SHEET"] + self.select_counts["CSV"]
 
-        for key, sub_key, iterator in fs.iterate_selected_files(excel_keys=self.get_selected_type(type="EXCEL"),
-                                                                csv_keys=self.get_selected_type(type="CSV"),
-                                                                intended_names=intended_names,
-                                                                intended_types=intended_types,
-                                                                use_filter=use_filter):
-            if iterator is None:
-                self.show_message("Selected File: " + ga.file_links[key] + "-" + ga.sheet_links[sub_key] + " Doesnt Match Format. Skipping")
+        for fileSchema in fs.iterate_selected_data(format):
+            if not fileSchema.valid:
+                self.show_file_message(file=fileSchema, text="Has Invalid Format. Skipping")
                 self.start_file_progress(total=0)
             else:
-                self.start_file_progress(total=next(iterator))
-                for batch, batch_rows in iterator:
-                    if batch is None:
-                        self.show_message("Selected File: " + ga.file_links[key] + "-" + ga.sheet_links[sub_key] + " Has Invalid Data Type. Skipping Remaining")
+                self.start_file_progress(total=fileSchema.total)
+                for batch in fileSchema.data:
+                    if not batch.valid:
+                        self.show_message(file=fileSchema, text="Data Doesnt Match Expected Types. Skipping Remainder Of File")
                         break
                     else:
-                        self.update_file_progress(n=batch_rows)
-                        yield key, sub_key, batch
+                        self.update_file_progress(n=batch.size)
+                        yield fileSchema.file, fileSchema.subfile, batch.data
+
+
+    #---------------------------------------------------------------
+    #---------------------------------------------------------------
+    #---------------------------------------------------------------
+
+
+
+    def iterate_selected_data(self, format:Format) -> Iterator[File]:
+
+        excel_keys = self.get_selected_type(type="EXCEL") 
+        csv_keys = self.get_selected_type(type="CSV")
+        
+        #Iterate Excel Files
+        for excel_key, sheet_keys in excel_keys.items():
+            wb = fs.open_file(type="EXCEL", path=self.file_links[excel_key], app=self.applications["EXCEL"], read=True)
+            for sheet_key in sheet_keys:
+                ws = fs.open_subfile(type="EXCEL", file=wb, subfile=self.sheet_names[sheet_key])
+
+                iterator = fs.iterate_sheet()
+
+
+                iterator = self.iterate_file(file=ws, format=format)
+                for data in iterator:
+                    yield File(data=data, file=excel_key, subfile=sheet_key)
+                del ws
+            fs.close_file(type="EXCEL", file=wb)
+
+        #Iterate CSV Files:
+        for csv_key in csv_keys:
+            csv = fs.open_file(type="CSV", path=ga.file_links[csv_key], app=ga.applications["CSV"], read=True)
+            iterator = self.iterate_file(file=csv, format=)
+            
+            yield iterate_csv()
+            close_file(type="CSV",file=csv)
+
+
+
+    def iterate_selected_files_data(self, use_filter:bool, intended_names:list[list[str]], intended_types:list[tuple[str, type]]):
+        
+        self.files_to_run = self.select_counts["EXCEL-SHEET"] + self.select_counts["CSV"]
+
+        for fileStream in fs.iterate_files_data(excel_keys=self.get_selected_type(type="EXCEL"),
+                                                csv_keys=self.get_selected_type(type="CSV"),
+                                                intended_names=intended_names,
+                                                intended_types=intended_types,
+                                                use_filter=use_filter):
+            
+            if not fileStream.valid:
+                self.show_message("Selected File: " + self.file_links[fileStream.file] + "-" + (self.sheet_names[fileStream.subfile] if fileStream.subfile in self.sheet_names else "") + " Doesnt Match Format. Skipping")
+                self.start_file_progress(total=0)
+            else:
+                self.start_file_progress(total=fileStream.total)
+
+                for batch in fileStream.batches:
+
+                    if not batch.valid:
+                        self.show_message("Selected File: " + self.file_links[fileStream.file] + "-" + (self.sheet_names[fileStream.subfile] if fileStream.subfile in self.sheet_names else "") + " Data Doesnt Match Expected Types. Skipping Remainder Of File")
+                        break
+                    else:
+                        self.update_file_progress(n=batch.size)
+                        yield fileStream.file, fileStream.subfile, batch.data
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.geometry("1200x600")
-    ga.app = FunctionApp(root)
-    root.protocol("WM_DELETE_WINDOW", ga.app.on_closing)
+
+    app = FunctionApp(root)
+    inner_functions.app = app
+    
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()

@@ -1,5 +1,5 @@
 import pyodbc
-import global_attributes as ga
+import Disp.global_structures as ga
 
 
 

@@ -1,10 +1,14 @@
 from collections import defaultdict
-import global_attributes as ga
+import Disp.global_structures as ga
 from typing import Tuple
 import re
 import file_support as fs
 import db_support as ds
 import numpy as np
+
+
+
+app = None
 
 stage = 0
 internal_storage = None
@@ -82,13 +86,12 @@ UCI_PARSE = np.frompyfunc(evaluate_uci,1,1)
 
 def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, keys:str):
 
-    #Storing
     internal = defaultdict(lambda: defaultdict(int))
+    args = [use_filter, [split_indexs(keys)], [("KEY", object)]]
+
 
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_data(use_filter=filter, 
-                                                          intended_names=[split_indexs(keys)],
-                                                          intended_types=[('KEY', object)]):
+    for file, sheet, data in ga.app.iterate_selected_files_data(*args):
         if parse:
             data = UCI_PARSE(data)
         for row in data:
@@ -115,7 +118,7 @@ def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, key
     #Report
     fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("UNDIRECTED"), columns=["KEYS","COUNT","VALUES"])
         
-def directed_set(parse:bool, filter:bool, output:int, keys:str):
+def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
     global internal
     global stage
 
@@ -128,7 +131,9 @@ def directed_set(parse:bool, filter:bool, output:int, keys:str):
         internal = NoNewKeysDefaultDict(set,internal)
 
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_row_files(filter=filter,intended=[split_indexs(keys)]):
+    for file, sheet, data in ga.app.iterate_selected_data(use_filter=use_filter,
+                                                          intended_names=[split_indexs(keys)],
+                                                          intended_types=[("KEY", object)]):
         if parse:
             data = UCI_PARSE(data)
         if stage == 0:
@@ -145,14 +150,14 @@ def directed_set(parse:bool, filter:bool, output:int, keys:str):
         aggregates = []
         for value, subfiles in internal.items():
             if (len(subfiles) == 0 and output == 0) or (len(subfiles) > 1 and output == 1):
-                aggregates.append([value, ';'.join(subfiles)])
+                aggregates.append([value, len(subfiles), ';'.join(subfiles)])
 
         #REPORT
         fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("DIRECTED"), columns=["KEYS", "COUNT", "VALUES"])
     
     stage ^= 1
        
-def match_col(parse:bool, filter:bool, output:int, aggregate:int, keys:str, values:str):
+def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, values:str):
 
     #Storing
     if aggregate in [0,1]:
@@ -163,11 +168,18 @@ def match_col(parse:bool, filter:bool, output:int, aggregate:int, keys:str, valu
         pass
 
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_row_files(filter=filter, intended=[split_indexs(keys), split_indexs(values)]):
+    for file, sheet, data in ga.app.iterate_selected_data(use_filter=use_filter, 
+                                                          intended_names=[split_indexs(keys), split_indexs(values)],
+                                                          intended_types=[("KEY",object), ("VALUE", object)]):
         if parse:
             data[:,0] = UCI_PARSE(data[:,0])
-        for row in data:
-            internal[row[0]].add(row[1])
+
+        if aggregate in [0,1]:
+            for row in data:
+                internal[row[0]].append(row[1])
+        else:
+            for row in data:
+                internal[row[0]].add(row[1])
 
     #Aggregates
     aggregates = []
@@ -176,7 +188,7 @@ def match_col(parse:bool, filter:bool, output:int, aggregate:int, keys:str, valu
         if (output == 0) or (output == 1 and total_count == 1) or (output == 2 and total_count > 1):
 
             if total_count == 1:
-                aggregates.append([key, values[0], 1])
+                aggregates.append([key, 1, values[0]])
             elif aggregate in [0,2]:
                 aggregates.append([key, total_count, ';'.join(values)])
             else:

@@ -1,10 +1,11 @@
 from collections import defaultdict
-import Disp.global_structures as ga
 from typing import Tuple
 import re
 import file_support as fs
 import db_support as ds
 import numpy as np
+from global_structures import *
+import datetime
 
 
 
@@ -87,15 +88,21 @@ UCI_PARSE = np.frompyfunc(evaluate_uci,1,1)
 def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, keys:str):
 
     internal = defaultdict(lambda: defaultdict(int))
-    args = [use_filter, [split_indexs(keys)], [("KEY", object)]]
-
+    format = Format(intended_names=[split_indexs(keys)], intended_types=[("KEY", object)], use_filter=use_filter)
 
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_files_data(*args):
-        if parse:
-            data = UCI_PARSE(data)
-        for row in data:
-            internal[row[0]][sheet] += 1
+    for file in app.iterate_selected_data(format):
+        file_id, subfile_id = file.file, file.subfile
+        for batch in app.updating_iterating_batches(file=file):
+            data = batch.data
+            if parse:
+                data = UCI_PARSE(data)
+            for row in data:
+                internal[row[0]][subfile_id] += 1
+         
+
+
+    
 
     #Aggregating
     aggregates = []
@@ -116,8 +123,12 @@ def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, key
             aggregates.append([value, total_count, ";".join(subfiles.keys())])
 
     #Report
-    fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("UNDIRECTED"), columns=["KEYS","COUNT","VALUES"])
+    fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("UNDIRECTED"), columns=["KEYS","COUNT","VALUES"])
         
+
+
+
+
 def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
     global internal
     global stage
@@ -130,18 +141,24 @@ def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
             internal[k] = set()
         internal = NoNewKeysDefaultDict(set,internal)
 
+
+    format = Format(intended_names=[split_indexs(keys)], intended_types=[("KEY", object)], use_filter=use_filter)
+
+
     #Filling
-    for file, sheet, data in ga.app.iterate_selected_data(use_filter=use_filter,
-                                                          intended_names=[split_indexs(keys)],
-                                                          intended_types=[("KEY", object)]):
-        if parse:
-            data = UCI_PARSE(data)
-        if stage == 0:
-            for row in data:
-                internal[row[0]].add(sheet)
-        else:
-            for row in data:
-                internal.add_to_set(row[0], sheet)
+    for file in app.iterate_selected_data(format):
+        file_id, subfile_id = file.file, file.subfile
+        for batch in app.updating_iterating_batches(file=file):
+            data = batch.data
+   
+            if parse:
+                data = UCI_PARSE(data)
+            if stage == 0:
+                for row in data:
+                    internal[row[0]].add(subfile_id)
+            else:
+                for row in data:
+                    internal.add_to_set(row[0], subfile_id)
     
     #Aggregating
     if stage == 0:
@@ -153,7 +170,7 @@ def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
                 aggregates.append([value, len(subfiles), ';'.join(subfiles)])
 
         #REPORT
-        fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("DIRECTED"), columns=["KEYS", "COUNT", "VALUES"])
+        fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("DIRECTED"), columns=["KEYS", "COUNT", "VALUES"])
     
     stage ^= 1
        
@@ -167,19 +184,25 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
     else:
         pass
 
-    #Filling
-    for file, sheet, data in ga.app.iterate_selected_data(use_filter=use_filter, 
-                                                          intended_names=[split_indexs(keys), split_indexs(values)],
-                                                          intended_types=[("KEY",object), ("VALUE", object)]):
-        if parse:
-            data[:,0] = UCI_PARSE(data[:,0])
+    format = Format(intended_names=[split_indexs(keys), split_indexs(values)], intended_types=[("KEY", object),("VALUE", object)], use_filter=use_filter)
 
-        if aggregate in [0,1]:
-            for row in data:
-                internal[row[0]].append(row[1])
-        else:
-            for row in data:
-                internal[row[0]].add(row[1])
+
+    for file in app.iterate_selected_data(format):
+        file_id, subfile_id = file.file, file.subfile
+        for batch in app.updating_iterating_batches(file=file):
+            data = batch.data
+
+            print(data)
+
+            if parse:
+                data[:,0] = UCI_PARSE(data[:,0])
+
+            if aggregate in [0,1]:
+                for row in data:
+                    internal[row[0]].append(row[1])
+            else:
+                for row in data:
+                    internal[row[0]].add(row[1])
 
     #Aggregates
     aggregates = []
@@ -190,7 +213,8 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
             if total_count == 1:
                 aggregates.append([key, 1, values[0]])
             elif aggregate in [0,2]:
-                aggregates.append([key, total_count, ';'.join(values)])
+                print(values)
+                aggregates.append([key, total_count, ';'.join(map(str,values))])
             else:
                 if aggregate == 1:
                     aggregates.append([key,  total_count, sum(values)])
@@ -199,7 +223,9 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
                 elif aggregate == 4:
                     aggregates.append([key, total_count, min(values)])
 
-    fs.create_csv_output(data=aggregates, file_name=ga.app.choose_file_name("MATCH"), columns=["KEY","COUNT","VALUE"])
+    fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("MATCH"), columns=["KEY","COUNT","VALUE"])
+
+
 
 def upload_triggers(trigger):
     
@@ -211,13 +237,19 @@ def upload_triggers(trigger):
     elif trigger == 2:
         intended.append(['Departure_Date'])
 
-    for _, _, data in ga.app.iterate_selected_data(filter=False, intended_names=intended,
-                                                        dtype=[
-                                                            ()
-                                                        ]):
+    format = Format(intended_names:=intended, intended_types:=[('UCI',np.int32), ('TRIGGER_DATE', np.dtype('datetime64[D]'))])
 
 
-        data[:, 1] = np.array([np.datetime64(d) for d in data[:, 1]])
-        data = np.unique(data, axis=0)
-        data = np.insert(data, data.shape[1], trigger, axis=1)
-        ds.upload_triggers(data=fs.numpy_to_tuple(data))
+    for file in app.iterate_selected_data(format):
+        for batch in app.updating_iterating_batches(file=file):
+            data = batch.data
+
+
+            data = np.unique(data, axis=0)
+            
+            trigger_col = np.full((data.shape[0], 1), trigger)
+            data = np.hstack((data, trigger_col))
+
+            data[:,1] = data[:,1].astype('datetime64[ns]').astype(datetime.datetime)
+
+            ds.upload_triggers(data=data)

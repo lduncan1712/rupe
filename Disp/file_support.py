@@ -189,7 +189,7 @@ def iterate_sheet(sheet:Any, format:Format) -> File:
     else:
         iterator = iterate_range(rng=used, intended_indexs=indexs, format=format)
 
-    return File(total=rows, batches=iterator, valid=valid)
+    return File(rows=rows, data=iterator, valid=valid)
 
 def iterate_range(rng:Any, intended_indexs:list[int], format:Format, offset:int = 0) -> Iterator[BatchData]:
 
@@ -211,12 +211,18 @@ def iterate_range(rng:Any, intended_indexs:list[int], format:Format, offset:int 
         #Add Columns
         for col_id, (name, dtype) in zip(intended_indexs, format.intended_types):
             batch_column = ws.Range(ws.Cells(r_start, c_first+col_id), ws.Cells(r_end, c_first+col_id))
+           
+            print("ATTEMPTING TO ADD ROWS")
+            print(batch_column.Value)
+            print("TYPE ASSIGNED TO IT:")
+            print(dtype)
+           
             np_columns.append(np.array(batch_column.Value, dtype=dtype).reshape(-1))
 
         #Join Into Array
         data = np.column_stack(np_columns)
 
-        valid = validate_data(intended_types=format.intended_types, data=data, is_excel=True)
+        valid = validate_data(format=format, data=data, is_excel=True)
 
         yield BatchData(data=data, rows=r_totals, valid=valid)
         
@@ -240,26 +246,21 @@ def iterate_areas(rng:Any, intended_indexs:list[int], format:Format) -> Iterator
 def iterate_csv(csv:Any, format:Format) -> File:
     
     names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
-    indexs, valid = validate_schema()
-    iterator = iterate_rows(csv=csv, intended_indexs=indexs)
+    indexs, valid = validate_schema(found_names=names, format=format)
+    iterator = iterate_rows(csv=csv, intended_indexs=indexs, format=format)
 
     rows = get_row_counts(type="CSV", data=csv)
 
-    return File(total=rows, data=iterator, valid=valid)
+    return File(rows=rows, data=iterator, valid=valid)
 
 
 
-def iterate_rows(core:FileCore, format:FileFormat) -> Iterator[Batch]:
+def iterate_rows(csv:Any, intended_indexs:list[int], format:Format) -> Iterator[BatchData]:
     
     rows = []
     r_cumulative = 0
-    r_total = sum(1 for _ in csv)
-    yield r_total
 
-    temp_intended = intended_types[0][1] if len(intended_types) == 1 else temp_intended
-
-    csv.seek(0)
-    next(csv)
+    temp_intended = format.intended_types[0][1] if len(format.intended_types) == 1 else temp_intended
 
     for line in csv:
         row = line.rstrip("\n").split(",")
@@ -268,16 +269,20 @@ def iterate_rows(core:FileCore, format:FileFormat) -> Iterator[Batch]:
         r_cumulative += 1
 
         if r_cumulative == BATCH_SIZE:
-            yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtypes=temp_intended), use_excel=False), BATCH_SIZE
+            data = np.array(rows, dtype=temp_intended)
+            valid = validate_data(format=format, data=data, is_excel=False)
+
+            yield BatchData(data=data, rows=BATCH_SIZE, valid=valid)
             rows = []
             r_cumulative = 0
 
     if not r_cumulative == 0:
-        yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtype=temp_intended), use_excel=False), r_cumulative
+        data = np.array(rows, dtype=temp_intended)
+        valid = validate_data(format=format, data=data, is_excel=False)
+
+        yield BatchData(data=data, rows=r_cumulative, valid=valid)
         rows = []
         r_cumulative = 0
-
-
 
 
 def validate_schema(found_names:list[str], format:Format) -> Tuple[list[int], bool]:
@@ -305,6 +310,7 @@ def validate_data(format:Format, data:NDArray, is_excel:bool=False) -> bool:
         if not match:
             #But Its Excel, Its Intended To Be Integer, But Is Actually Floating
             if is_excel and np.issubdtype(intended_type, np.integer) and np.issubdtype(col_type, np.floating):
+                print("SHOULD BE TRYING TO CONVERT")
                 if np.all(np.modf(data[:,i] == 0)):
                     data[:, i] = data[:,i].astype(np.int32)
                 else:
@@ -438,12 +444,12 @@ def get_row_counts(type:str, data:Any) -> int:
 
 
 
-# def create_csv_output(data:Tuple, file_name:str, columns:list) -> None:
+def create_csv_output(data:Tuple, file_name:str, columns:list) -> None:
 
-#     if file_name is None:
-#         return
+    if file_name is None:
+        return
 
-#     with open(file_name, "w", newline="", encoding="utf-8") as f:
-#         writer = csv.writer(f)
-#         writer.writerow(columns)
-#         writer.writerows(data)                
+    with open(file_name, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        writer.writerows(data)                

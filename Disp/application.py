@@ -430,23 +430,21 @@ class FunctionApp:
 
         self.show_message("Selected File: " + file_name + "-" + sub_name + "  " + text)
 
-    def updating_row_iteration(self, format:Format) -> Iterator[Tuple[int, int, NDArray[Any]]]:
+    def updating_iterating_batches(self, file:File) -> Iterator[BatchData]:
 
-        self.files_to_run = self.select_counts["EXCEL-SHEET"] + self.select_counts["CSV"]
 
-        for fileSchema in fs.iterate_selected_data(format):
-            if not fileSchema.valid:
-                self.show_file_message(file=fileSchema, text="Has Invalid Format. Skipping")
-                self.start_file_progress(total=0)
-            else:
-                self.start_file_progress(total=fileSchema.total)
-                for batch in fileSchema.data:
-                    if not batch.valid:
-                        self.show_message(file=fileSchema, text="Data Doesnt Match Expected Types. Skipping Remainder Of File")
-                        break
-                    else:
-                        self.update_file_progress(n=batch.size)
-                        yield fileSchema.file, fileSchema.subfile, batch.data
+        if not file.valid:
+            self.show_file_message(file=file, text="Has Invalid Format. Skipping")
+            self.start_file_progress(total=0)
+        else:
+            self.start_file_progress(total=file.rows)
+            for batch in file.data:
+                if not batch.valid:
+                    self.show_message(file=file, text="Data Doesnt Match Expected Types. Skipping Remainder Of File")
+                    break
+                else:
+                    self.update_file_progress(n=batch.rows)
+                    yield batch
 
 
     #---------------------------------------------------------------
@@ -457,6 +455,8 @@ class FunctionApp:
 
     def iterate_selected_data(self, format:Format) -> Iterator[File]:
 
+        self.files_to_run = self.select_counts["EXCEL-SHEET"] + self.select_counts["CSV"]
+
         excel_keys = self.get_selected_type(type="EXCEL") 
         csv_keys = self.get_selected_type(type="CSV")
         
@@ -466,22 +466,19 @@ class FunctionApp:
             for sheet_key in sheet_keys:
                 ws = fs.open_subfile(type="EXCEL", file=wb, subfile=self.sheet_names[sheet_key])
 
-                iterator = fs.iterate_sheet()
-
-
-                iterator = self.iterate_file(file=ws, format=format)
-                for data in iterator:
-                    yield File(data=data, file=excel_key, subfile=sheet_key)
+                file = fs.iterate_sheet(sheet=ws, format=format)
+                
+                yield File(data=file.data, rows=file.rows, valid=file.valid, file=excel_key, subfile=sheet_key)
                 del ws
             fs.close_file(type="EXCEL", file=wb)
 
         #Iterate CSV Files:
         for csv_key in csv_keys:
-            csv = fs.open_file(type="CSV", path=ga.file_links[csv_key], app=ga.applications["CSV"], read=True)
-            iterator = self.iterate_file(file=csv, format=)
-            
-            yield iterate_csv()
-            close_file(type="CSV",file=csv)
+            csv = fs.open_file(type="CSV", path=self.file_links[csv_key], app=self.applications["CSV"], read=True)
+            file = fs.iterate_csv(csv=csv, format=format)
+        
+            yield File(data=file.data, rows=file.rows, valid=file.valid, file=csv_key, subfile=csv_key)
+            fs.close_file(type="CSV",file=csv)
 
 
 

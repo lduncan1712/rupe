@@ -20,6 +20,6 @@ class BatchData:
 class File:
     data: Iterator[BatchData]
     rows: int
+    file: int = -1
+    subfile: int = -1
     valid:bool = True
-    file: int
-    subfile: int

@@ -1,5 +1,8 @@
 import pyodbc
-import Disp.global_structures as ga
+
+
+conn = None
+cur = None
 
 
 
@@ -10,15 +13,17 @@ def connect_to_db(name:str) -> bool:
         temp_conn  = pyodbc.connect("DSN=" + name)
         temp_cur = temp_conn.cursor()
         #temp_cur.fast_executemany = True
-        ga.conn = temp_conn
-        ga.cur = temp_cur
+        conn = temp_conn
+        cur = temp_cur
         return True
     except Exception:
         return False
     
 def close_connection():
-    if not ga.conn is None:
-        ga.conn.close()
+    if not conn is None:
+        conn.close()
+
+
 
 
 

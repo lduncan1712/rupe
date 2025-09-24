@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-
+import copy
 
 from global_structures import *
 
@@ -411,13 +411,15 @@ class FunctionApp:
         self.files_run += 1
         self.rows_run = 0
         self.rows_to_run = total
-        self.progress["value"] = 5 + 90*(self.files_run/self.files_to_run)
+        self.progress["value"] = 5 + 90*((self.files_run - 1)/self.files_to_run)
         self.update_label(text="R: 0/" + str(total))        
 
     def update_file_progress(self, n:int):
         self.rows_run += n
-        self.progress["value"] = 5 + 90*(((self.files_run)/self.files_to_run)  + (self.rows_run/self.rows_to_run)/self.files_to_run)
+        self.progress["value"] = 5 + 90*(  ((self.files_run - 1)/self.files_to_run)  + (self.rows_run/self.rows_to_run)/self.files_to_run)
         self.update_label(text="R:" + str(self.rows_run) + " / " + str(self.rows_to_run))
+        print("After Updating Progress")
+        print(self.progress["value"])
         
     def update_label(self, text:str):
         self.progress_label.config(text=text)
@@ -466,7 +468,7 @@ class FunctionApp:
             for sheet_key in sheet_keys:
                 ws = fs.open_subfile(type="EXCEL", file=wb, subfile=self.sheet_names[sheet_key])
 
-                file = fs.iterate_sheet(sheet=ws, format=format)
+                file = fs.iterate_sheet(sheet=ws, format=copy.deepcopy(format))
                 
                 yield File(data=file.data, rows=file.rows, valid=file.valid, file=excel_key, subfile=sheet_key)
                 del ws
@@ -475,7 +477,7 @@ class FunctionApp:
         #Iterate CSV Files:
         for csv_key in csv_keys:
             csv = fs.open_file(type="CSV", path=self.file_links[csv_key], app=self.applications["CSV"], read=True)
-            file = fs.iterate_csv(csv=csv, format=format)
+            file = fs.iterate_csv(csv=csv, format=copy.deepcopy(format))
         
             yield File(data=file.data, rows=file.rows, valid=file.valid, file=csv_key, subfile=csv_key)
             fs.close_file(type="CSV",file=csv)

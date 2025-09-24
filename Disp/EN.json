@@ -42,15 +42,18 @@
             "fields": ["Keys", "Values"]
         },
 
-        "upload_location": {
-            "name": "Upload Locations",
+        "upload_files": {
+            "name": "Upload Files",
             "description": "TODO",
             "checkboxes": ["Clear Existing"]
         },
-        "upload_disposition": {
+        "upload_dispositions": {
             "name": "Upload Disposition",
             "description": "TODO",
-            "checkboxes": ["Clear Existing"]
+            "checkboxes": ["Clear Existing", "Use Filter", "Immigration Hold (2009+)", "BackFill"],
+            "dropdowns": {
+                "Destruction": [24,25,26,27,28,29,30,31,32,33,34,35] 
+            }
         },
         "upload_event": {
             "name": "Upload Events",

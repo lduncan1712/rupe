@@ -5,9 +5,14 @@ from typing import Any, Iterator
 
 @dataclass
 class Format:
-    intended_names:list[list[str]]
-    intended_types:list[tuple[str,type]]
+    intended_names:list[str]
+    search_names:list[list[str]]
+    intended_types:list[type]
     use_filter:bool = False
+    intended_indexs:list[int] = None
+    key_indexs:list[int] = None
+    found_names:list[str] = None
+
 
 
 @dataclass

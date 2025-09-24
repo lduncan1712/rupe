@@ -6,6 +6,8 @@ import db_support as ds
 import numpy as np
 from global_structures import *
 import datetime
+from numpy.lib import recfunctions as rfn
+
 
 
 
@@ -80,17 +82,17 @@ def split_indexs(column_string:str) -> list:
 UCI_PARSE = np.frompyfunc(evaluate_uci,1,1)
 
 
-#----------------------------------------------------------
-#----------------------------------------------------------
-#----------------------------------------------------------
 
 
 def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, keys:str):
 
+    #Setup Data
     internal = defaultdict(lambda: defaultdict(int))
-    format = Format(intended_names=[split_indexs(keys)], intended_types=[("KEY", object)], use_filter=use_filter)
 
-    #Filling
+    #Format
+    format = Format(intended_names=["KEY"], search_names=[split_indexs(keys)], intended_types=[object], use_filter=use_filter)
+    
+    #Iterate Data
     for file in app.iterate_selected_data(format):
         file_id, subfile_id = file.file, file.subfile
         for batch in app.updating_iterating_batches(file=file):
@@ -100,11 +102,7 @@ def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, key
             for row in data:
                 internal[row[0]][subfile_id] += 1
          
-
-
-    
-
-    #Aggregating
+    #Aggregate Data
     aggregates = []
     for value, subfiles in internal.items():
         total_count = sum(subfiles.values())
@@ -141,8 +139,7 @@ def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
             internal[k] = set()
         internal = NoNewKeysDefaultDict(set,internal)
 
-
-    format = Format(intended_names=[split_indexs(keys)], intended_types=[("KEY", object)], use_filter=use_filter)
+    format = Format(intended_names=["KEY"], search_names=[split_indexs(keys)], intended_types=[object], use_filter=use_filter)
 
 
     #Filling
@@ -184,7 +181,8 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
     else:
         pass
 
-    format = Format(intended_names=[split_indexs(keys), split_indexs(values)], intended_types=[("KEY", object),("VALUE", object)], use_filter=use_filter)
+
+    format = Format(intended_names=["KEY", "VALUE"], search_names=[split_indexs(keys), split_indexs(values)], intended_types=[object, object], use_filter=use_filter)
 
 
     for file in app.iterate_selected_data(format):
@@ -237,19 +235,65 @@ def upload_triggers(trigger):
     elif trigger == 2:
         intended.append(['Departure_Date'])
 
-    format = Format(intended_names:=intended, intended_types:=[('UCI',np.int32), ('TRIGGER_DATE', np.dtype('datetime64[D]'))])
+    
+    format = Format(intended_names=["UCI", "TRIGGER_DATE"], search_names=intended, intended_types=[np.int32, np.dtype('datetime64[D]')])
+
+    for file in app.iterate_selected_data(format):
+        for batch in app.updating_iterating_batches(file=file):
+            data = batch.data
+
+            data = np.unique(data, axis=0)
+            
+            trigger_col = np.full(data.shape[0], trigger)
+
+            data = rfn.append_fields(data, 'TRIGGER', trigger_col, usemask=False)
+
+            data = (convert_row_to_python(row) for row in data)
+
+            ds.upload_triggers(data=data)
+
+def upload_files(clear:bool):
+    
+    names = ["UCI", "VOLUMES", "TEMP", "LOCATION", "OFFICE"]
+    format = Format(intended_names=names, search_names=names, intended_types=[np.int32, np.int32, str, str, str])
 
 
     for file in app.iterate_selected_data(format):
         for batch in app.updating_iterating_batches(file=file):
             data = batch.data
 
-
-            data = np.unique(data, axis=0)
+            #data = np.unique(data, axis=0)
             
-            trigger_col = np.full((data.shape[0], 1), trigger)
-            data = np.hstack((data, trigger_col))
+            #trigger_col = np.full(data.shape[0], trigger)
 
-            data[:,1] = data[:,1].astype('datetime64[ns]').astype(datetime.datetime)
+            #data = rfn.append_fields(data, 'TRIGGER', trigger_col, usemask=False)
 
-            ds.upload_triggers(data=data)
+            data = (convert_row_to_python(row) for row in data)
+
+            print(data)
+
+            ds.upload_files(data=data)
+
+
+
+def upload_dispositions():
+    names = ["id", "UCI", "EVENT_TYPE", "EVENT_DATE", "EVENT_STAGE"]
+    format = Format(intended_names=names, search_names=names, intended_types=[np.int32, np.int32, str, np.dtype('datetime64[D]'), str])
+
+    for file in app.iterate_selected_data(format):
+        for batch in app.updating_iterating_batches(file=file):
+
+            data = batch.data
+            data = (convert_row_to_python(row) for row in data)
+
+            ds.upload
+    
+
+
+def convert_row_to_python(row):
+    return tuple(
+        x.item() if isinstance(x, (np.integer, np.floating)) else
+        x.astype(datetime.datetime) if isinstance(x, np.datetime64) else
+        x
+        for x in row
+    )

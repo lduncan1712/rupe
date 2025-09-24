@@ -165,7 +165,7 @@ def iterate_sheet(sheet:Any, format:Format) -> File:
 
     if has_table:
         table = sheet.ListObjects(1)
-        names = [c for c in table.HeaderRowRange.Value[0]]
+        format.found_names = [c for c in table.HeaderRowRange.Value[0]]
         if format.use_filter:
             used = table.DataBodyRange.SpecialCells(12)
         else:
@@ -173,25 +173,25 @@ def iterate_sheet(sheet:Any, format:Format) -> File:
     #Iterate Cell Range
     else:
         used = sheet.UsedRange
-        names = list(used.Rows(1).Cells.Value[0])
+        format.found_names = list(used.Rows(1).Cells.Value[0])
         used = sheet.Range(sheet.Cells(used.Row + 1, used.Column), 
                            sheet.Cells(used.Row + used.Rows.Count - 1, used.Column + used.Columns.Count - 1))
   
 
     #Validate Schema
-    indexs,valid = validate_schema(found_names=names, format=format)
+    format.intended_indexs,valid = validate_schema(format=format)
 
     rows = get_row_counts(type="EXCEL", data=used)
 
     #Iterate
     if has_table and format.use_filter:
-        iterator = iterate_areas(rng=used, intended_indexs=indexs, format=format)
+        iterator = iterate_areas(rng=used, format=format)
     else:
-        iterator = iterate_range(rng=used, intended_indexs=indexs, format=format)
+        iterator = iterate_range(rng=used, format=format)
 
     return File(rows=rows, data=iterator, valid=valid)
 
-def iterate_range(rng:Any, intended_indexs:list[int], format:Format, offset:int = 0) -> Iterator[BatchData]:
+def iterate_range(rng:Any, format:Format, offset:int = 0) -> Iterator[BatchData]:
 
     #Size
     n_rows = rng.Rows.Count
@@ -209,24 +209,21 @@ def iterate_range(rng:Any, intended_indexs:list[int], format:Format, offset:int 
         np_columns = []
 
         #Add Columns
-        for col_id, (name, dtype) in zip(intended_indexs, format.intended_types):
+        for col_id, dtype in zip(format.intended_indexs, format.intended_types):
             batch_column = ws.Range(ws.Cells(r_start, c_first+col_id), ws.Cells(r_end, c_first+col_id))
-           
-            print("ATTEMPTING TO ADD ROWS")
-            print(batch_column.Value)
-            print("TYPE ASSIGNED TO IT:")
-            print(dtype)
-           
+               
             np_columns.append(np.array(batch_column.Value, dtype=dtype).reshape(-1))
+    
+        #dtype = np.dtype(list(zip(format.intended_names, format.intended_types)))
+        #print(dtype)
 
-        #Join Into Array
-        data = np.column_stack(np_columns)
+        data = np.core.records.fromarrays(np_columns, names=format.intended_names)
 
         valid = validate_data(format=format, data=data, is_excel=True)
 
         yield BatchData(data=data, rows=r_totals, valid=valid)
         
-def iterate_areas(rng:Any, intended_indexs:list[int], format:Format) -> Iterator[BatchData]:
+def iterate_areas(rng:Any, format:Format) -> Iterator[BatchData]:
 
     #Size
     ws = rng.Worksheet
@@ -237,7 +234,7 @@ def iterate_areas(rng:Any, intended_indexs:list[int], format:Format) -> Iterator
         offset = area.Row - next_empty
         next_empty = area.Row + area.Rows.Count - 1
         #TODO: Empty Columns In Area Can Be Dropped, Should Flag
-        yield from iterate_range(rng=area, intended_indexs=intended_indexs, format=format, offset=offset)
+        yield from iterate_range(rng=area, format=format, offset=offset)
 
 
 
@@ -246,16 +243,12 @@ def iterate_areas(rng:Any, intended_indexs:list[int], format:Format) -> Iterator
 def iterate_csv(csv:Any, format:Format) -> File:
     
     names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
-    indexs, valid = validate_schema(found_names=names, format=format)
-    iterator = iterate_rows(csv=csv, intended_indexs=indexs, format=format)
-
+    format.intended_indexs, valid = validate_schema(found_names=names, format=format)
+    iterator = iterate_rows(csv=csv, format=format)
     rows = get_row_counts(type="CSV", data=csv)
-
     return File(rows=rows, data=iterator, valid=valid)
 
-
-
-def iterate_rows(csv:Any, intended_indexs:list[int], format:Format) -> Iterator[BatchData]:
+def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
     
     rows = []
     r_cumulative = 0
@@ -264,7 +257,7 @@ def iterate_rows(csv:Any, intended_indexs:list[int], format:Format) -> Iterator[
 
     for line in csv:
         row = line.rstrip("\n").split(",")
-        row = [row[i] for i in intended_indexs]
+        row = [row[i] for i in format.intended_indexs]
         rows.append(row)
         r_cumulative += 1
 
@@ -285,17 +278,30 @@ def iterate_rows(csv:Any, intended_indexs:list[int], format:Format) -> Iterator[
         r_cumulative = 0
 
 
-def validate_schema(found_names:list[str], format:Format) -> Tuple[list[int], bool]:
+
+def validate_schema(format:Format) -> Tuple[list[int], bool]:
     kept_indexs = []
-    for group in format.intended_names:
+
+    print("INTENDED_NAMES")
+    print(format.intended_names)
+
+    print("FOUND NAMES")
+    print(format.found_names)
+
+    for group in format.search_names:
+        print("LOOKING AT GROUP")
+        print(group)
         if len(group) == 1 and group[0].isdigit():
             c = int(group[0])
-            if c >= 0 and c < len(found_names):
+            if c >= 0 and c < len(format.found_names):
                 kept_indexs.append(c)
             else:
                 return kept_indexs, False
         else:    
-            found_in_group = [found_names.index(x) for x in found_names if x in group]
+            found_in_group = [format.found_names.index(x) for x in format.found_names if x in group]
+            print("Found In Group")
+            print(found_in_group)
+
             if len(found_in_group) == 1:
                 kept_indexs.append(found_in_group[0])
             else:
@@ -303,8 +309,8 @@ def validate_schema(found_names:list[str], format:Format) -> Tuple[list[int], bo
     return kept_indexs, True
 
 def validate_data(format:Format, data:NDArray, is_excel:bool=False) -> bool:
-    for i, (n, t) in enumerate(format.intended_types):
-        col_type = data[:, i].dtype
+    for i, (n,t) in enumerate(zip(format.intended_names, format.intended_types)):
+        col_type = data[n].dtype
         intended_type = np.dtype(t)
         match = np.issubdtype(col_type, intended_type)
         if not match:
@@ -338,101 +344,6 @@ def get_row_counts(type:str, data:Any) -> int:
         return rows
     else:
         ValueError("Invalid Type Entered")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# def iterate_excel_areas(column_indexs:list[int], intended_types:list, areas:range):
-#     pass
-    
-
-# def iterate_csv_file(csv, intended_names:list[list[str]], intended_types:list):
-
-
-#     found_names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
-
-#     column_indexs = enforce_file_schema(found_names=found_names, intended_names=intended_names)
-
-#     iterater = iterate_csv_rows(csv=csv, column_indexs=column_indexs, intended_types=intended_types)
-
-#     if column_indexs is None:
-#         iterater = None
-
-#     yield from iterater
-
-# def iterate_csv_rows(csv, column_indexs:list[int], intended_types:list):
-
-#     rows = []
-#     r_cumulative = 0
-#     r_total = sum(1 for _ in csv)
-#     yield r_total
-
-#     temp_intended = intended_types[0][1] if len(intended_types) == 1 else temp_intended
-
-#     csv.seek(0)
-#     next(csv)
-
-#     for line in csv:
-#         row = line.rstrip("\n").split(",")
-#         row = [row[i] for i in column_indexs]
-#         rows.append(row)
-#         r_cumulative += 1
-
-#         if r_cumulative == BATCH_SIZE:
-#             yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtypes=temp_intended), use_excel=False), BATCH_SIZE
-#             rows = []
-#             r_cumulative = 0
-
-#     if not r_cumulative == 0:
-#         yield enforce_data_extraction(intended_types=intended_types, data=np.array(rows, dtype=temp_intended), use_excel=False), r_cumulative
-#         rows = []
-#         r_cumulative = 0
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -38,7 +38,7 @@ def upload_triggers(data) -> bool:
     sql = "DELETE FROM temp_triggers"
     cur.execute(sql)
 
-    sql = "INSERT INTO temp_triggers(uci, trigger_date, trigger_type) VALUES (?, ?, ?)"
+    sql = f"INSERT INTO temp_triggers(uci, trigger_date, trigger_type) VALUES (?, ?, ?)"
     cur.executemany(sql, data)
     
     sql = """
@@ -106,37 +106,56 @@ def upload_events(data) -> bool:
     sql = "DELETE FROM temp_events"
     cur.execute(sql)
 
-    sql = "INSERT INTO temp_events(id, uci, event_type, event_date, event_stage) VALUES (%s, %s, %s, %s, %s, %s)"
+    sql = f"INSERT INTO temp_events(id, uci, event_type, event_date, event_stage) VALUES (?,?,?,?,?)"
     cur.executemany(sql, data)
 
     sql = """
         INSERT INTO event_types(label)
-        SELECT DISTINCT e.event_type
-        FROM temp_events as t
-        LEFT JOIN event_types as e
+        SELECT DISTINCT t.event_type
+        FROM temp_events AS t
+        LEFT JOIN event_types AS e
         ON t.event_type = e.label
-        WHERE e.label is NULL and t.event_type IS NOT NULL;
+        WHERE e.label IS NULL AND t.event_type IS NOT NULL;
         """
     cur.execute(sql)
 
     sql = """
         INSERT INTO event_stages(label)
-        SELECT DISTINCT e.event_stage
-        FROM temp_events as t
-        LEFT JOIN event_stages as e
+        SELECT DISTINCT t.event_stage
+        FROM temp_events AS t
+        LEFT JOIN event_stages AS e
         ON t.event_stage = e.label
-        WHERE e.label is NULL and t.event_state IS NOT NULL;
+        WHERE e.label IS NULL AND t.event_stage IS NOT NULL;
+
+    """
+    cur.execute(sql)
+
+
+    sql = """   
+        UPDATE (events AS e
+        INNER JOIN temp_events AS t ON e.id = t.id)
+        INNER JOIN event_stages AS es ON t.event_stage = es.label
+        SET e.event_stage = es.id;
     """
     cur.execute(sql)
 
     sql = """
         INSERT INTO events(id, uci, event_type, event_date, event_stage)
         SELECT 
-            
-
-
-
+            t.id,
+            t.uci,
+            et.id,
+            t.event_date,
+            es.id
+        FROM ((temp_events AS t
+            INNER JOIN event_types AS et ON t.event_type = et.label)
+            INNER JOIN event_stages AS es ON t.event_stage = es.label)
+            LEFT JOIN events AS e ON t.id = e.id
+        WHERE e.id IS NULL;
     """
+    cur.execute(sql)
+
+    cur.commit()
 
 
 

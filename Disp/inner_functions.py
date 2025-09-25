@@ -224,6 +224,18 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
     fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("MATCH"), columns=["KEY","COUNT","VALUE"])
 
 
+def clean_bsf_files():
+
+    pass
+
+
+
+
+
+
+
+
+
 
 def upload_triggers(trigger):
     
@@ -276,7 +288,7 @@ def upload_files(clear:bool):
 
 
 
-def upload_dispositions():
+def upload_events(clear:bool):
     names = ["id", "UCI", "EVENT_TYPE", "EVENT_DATE", "EVENT_STAGE"]
     format = Format(intended_names=names, search_names=names, intended_types=[np.int32, np.int32, str, np.dtype('datetime64[D]'), str])
 
@@ -286,7 +298,9 @@ def upload_dispositions():
             data = batch.data
             data = (convert_row_to_python(row) for row in data)
 
-            ds.upload
+            print(data)
+
+            ds.upload_events(data)
     
 
 

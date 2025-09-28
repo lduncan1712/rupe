@@ -56,7 +56,69 @@ def upload_triggers(data) -> bool:
     cur.execute(sql)
     cur.commit()
 
+def upload_events(data) -> bool:
 
+    print(data)
+
+    sql = "DELETE FROM temp_events"
+    cur.execute(sql)
+
+    sql = f"INSERT INTO temp_events(id, uci, event_type, event_date, event_stage, last_date) VALUES (?,?,?,?,?,?)"
+    cur.executemany(sql, data)
+
+    cur.commit()
+
+    sql = """
+        INSERT INTO event_types(name)
+        SELECT DISTINCT t.event_type
+        FROM temp_events AS t
+        LEFT JOIN event_types AS e
+        ON t.event_type = e.name
+        WHERE e.name IS NULL AND t.event_type IS NOT NULL;
+        """
+    cur.execute(sql)
+
+    sql = """
+        INSERT INTO event_stages(name)
+        SELECT DISTINCT t.event_stage
+        FROM temp_events AS t
+        LEFT JOIN event_stages AS e
+        ON t.event_stage = e.name
+        WHERE e.name IS NULL AND t.event_stage IS NOT NULL;
+
+    """
+    cur.execute(sql)
+
+
+    sql = """   
+        UPDATE (events AS e
+        INNER JOIN temp_events AS t ON e.id = t.id)
+        INNER JOIN event_stages AS es ON t.event_stage = es.name
+        SET e.event_stage = es.id;
+    """
+    cur.execute(sql)
+
+    sql = """
+        INSERT INTO events(id, uci, event_type, event_date, event_stage, last_date)
+        SELECT 
+            t.id,
+            t.uci,
+            et.id,
+            t.event_date,
+            es.id,
+            t.last_date
+        FROM ((temp_events AS t
+            INNER JOIN event_types AS et ON t.event_type = et.name)
+            INNER JOIN event_stages AS es ON t.event_stage = es.name)
+            LEFT JOIN events AS e ON t.id = e.id
+        WHERE e.id IS NULL;
+    """
+    cur.execute(sql)
+
+    cur.commit()
+
+
+    
 def upload_files(data) -> bool:
     
     sql = "DELETE FROM temp_files"
@@ -98,63 +160,6 @@ def upload_files(data) -> bool:
              INNER JOIN locations As l ON t.location = l.label;
     """
     cur.execute(sql)
-    cur.commit()
-
-
-def upload_events(data) -> bool:
-
-    sql = "DELETE FROM temp_events"
-    cur.execute(sql)
-
-    sql = f"INSERT INTO temp_events(id, uci, event_type, event_date, event_stage) VALUES (?,?,?,?,?)"
-    cur.executemany(sql, data)
-
-    sql = """
-        INSERT INTO event_types(label)
-        SELECT DISTINCT t.event_type
-        FROM temp_events AS t
-        LEFT JOIN event_types AS e
-        ON t.event_type = e.label
-        WHERE e.label IS NULL AND t.event_type IS NOT NULL;
-        """
-    cur.execute(sql)
-
-    sql = """
-        INSERT INTO event_stages(label)
-        SELECT DISTINCT t.event_stage
-        FROM temp_events AS t
-        LEFT JOIN event_stages AS e
-        ON t.event_stage = e.label
-        WHERE e.label IS NULL AND t.event_stage IS NOT NULL;
-
-    """
-    cur.execute(sql)
-
-
-    sql = """   
-        UPDATE (events AS e
-        INNER JOIN temp_events AS t ON e.id = t.id)
-        INNER JOIN event_stages AS es ON t.event_stage = es.label
-        SET e.event_stage = es.id;
-    """
-    cur.execute(sql)
-
-    sql = """
-        INSERT INTO events(id, uci, event_type, event_date, event_stage)
-        SELECT 
-            t.id,
-            t.uci,
-            et.id,
-            t.event_date,
-            es.id
-        FROM ((temp_events AS t
-            INNER JOIN event_types AS et ON t.event_type = et.label)
-            INNER JOIN event_stages AS es ON t.event_stage = es.label)
-            LEFT JOIN events AS e ON t.id = e.id
-        WHERE e.id IS NULL;
-    """
-    cur.execute(sql)
-
     cur.commit()
 
 

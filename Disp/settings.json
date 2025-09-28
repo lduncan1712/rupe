@@ -1,5 +1,5 @@
 {
     "language": "EN.json",
-    "database": ["Test1"],
+    "database": ["DispositionTest"],
     "paths": ["C:\\Users\\ldunc\\Downloads\\TestData.xlsx", "C:\\Users\\ldunc\\Downloads\\Book2.xlsx","C:\\Users\\ldunc\\Downloads\\169024504_VOE.pdf","C:\\Users\\ldunc\\Downloads\\BUSPAPER.docx"]
 }

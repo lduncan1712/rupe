@@ -41,7 +41,6 @@
             },
             "fields": ["Keys", "Values"]
         },
-
         "upload_files": {
             "name": "Upload Files",
             "description": "TODO",

@@ -63,12 +63,15 @@ class FunctionApp:
             self.root.destroy()
 
     def setup_frames(self) -> None:
-        self.left_frame = tk.Frame(self.root, width=300, bg="#f0f0f0")
-        self.middle_frame = tk.Frame(self.root, width=500, bg="#f0f0f0")
+        
+        self.left_frame = tk.Frame(self.root, width=200, bg="#f0f0f0")
+        self.middle_frame = tk.Frame(self.root, width=200, bg="#f0f0f0")
         self.right_frame = tk.Frame(self.root, width=300, bg="#f0f0f0")
-        self.left_frame.pack(side="left", fill="both", expand=True)
-        self.middle_frame.pack(side="left", fill="both", expand=True)
+        self.left_frame.pack(side="left", fill="both", expand=False)
+        self.middle_frame.pack(side="left", fill="both", expand=False)
         self.right_frame.pack(side="left", fill="both", expand=True)
+        
+        self.middle_frame.pack_propagate(False)
 
         self.setup_left_tree()
         self.setup_middle_tabs()
@@ -84,6 +87,11 @@ class FunctionApp:
         parent_id = self.left_tree.insert('', 'end', text='//', open=True)
         for func_key, func_data in self.text["functions"].items():
             self.left_tree.insert(parent_id, 'end', text=func_data["name"], open=False, tags=func_key)
+
+        #'parent_id = self.left_tree.insert('', 'end', text="**", open=True)
+        #'for func_key, func_data in self.text["database_functions"].items():
+        #''    self.left_tree.insert(parent_id, 'end', text=func_data["name"], open=False, tags=func_key)
+
 
         self.db_label = ttk.Label(self.left_frame, text="Storage:")
         self.db_label.pack(fill="x",padx=10, pady=(5,0))
@@ -108,19 +116,58 @@ class FunctionApp:
         notebook.pack(fill="both", expand=True)
         bottom = tk.Frame(self.middle_frame)
         bottom.pack(side='bottom', fill='x', pady=10, padx=10)
-        self.progress = ttk.Progressbar(bottom, orient="horizontal", length=150, mode="determinate")
-        self.progress.pack(side="left", padx=5)
-        run_button = tk.Button(bottom, text=self.text["run_button"], command=self.run_function).pack(side="left", padx=5)
-        self.progress_label = tk.Label(bottom, text="...")
+
+        top_row = tk.Frame(bottom)
+        top_row.pack(side="top", fill="x", pady=(0,5))  
+
+        run_button = tk.Button(top_row, text=self.text["run_button"], command=self.run_function)
+        run_button.pack(side="left", padx=5)
+
+        self.progress_label = tk.Label(top_row, text="...")
         self.progress_label.pack(side="left", padx=5)
+
+        # Progress bar below
+        self.progress = ttk.Progressbar(bottom, orient="horizontal", length=150, mode="determinate")
+        self.progress.pack(side="top", fill="x")  # fill horizontal width
+        
+
+        #self.progress = ttk.Progressbar(bottom, orient="horizontal", length=150, mode="determinate")
+        #self.progress.pack(side="left", padx=5)
+        #run_button = tk.Button(bottom, text=self.text["run_button"], command=self.run_function).pack(side="left", padx=5)
+        #self.progress_label = tk.Label(bottom, text="...")
+        #self.progress_label.pack(side="left", padx=5)
 
     def setup_right_tree(self) -> None:
 
-        vsb = ttk.Scrollbar(self.right_frame, orient='vertical')
+        tree_container = tk.Frame(self.right_frame)
+        tree_container.pack(fill="both", expand=True)
+
+
+        vsb = ttk.Scrollbar(tree_container, orient='vertical')
         vsb.pack(side='right', fill='y')
-        self.right_tree = CheckboxTreeview(self.right_frame, show='tree', yscrollcommand=vsb.set)
-        self.right_tree.pack(fill='both', expand=True)
+        hsb = ttk.Scrollbar(tree_container, orient='horizontal')
+        hsb.pack(side='bottom', fill='x')
+        self.right_tree = CheckboxTreeview(tree_container, show='tree', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        
+        # self.right_tree.grid(row=0, column=0, sticky="nsew")
+        # vsb.grid(row=0, column=1, sticky="ns")
+        # hsb.grid(row=1, column=0, sticky="ew")
+
+        # # let the tree grow inside the container
+        # tree_container.rowconfigure(0, weight=1)
+        # tree_container.columnconfigure(0, weight=1)
+
         vsb.config(command=self.right_tree.yview)
+        hsb.config(command=self.right_tree.xview)
+
+        self.right_tree.pack(fill='both', expand=True)
+
+        #self.right_tree.column("#0", width=400, stretch=False)
+
+        #self.right_tree.column("#0", width=400, stretch=False)
+
+
+
         self.right_tree.tag_configure('FOLDER', foreground='#C8B69F', font=('Arial',10, 'italic'))
         self.right_tree.tag_configure('WORD', foreground='blue', font=('Arial', 10, 'bold'))
         self.right_tree.tag_configure('PDF', foreground='red', font=('Arial', 10, 'bold'))
@@ -511,7 +558,7 @@ class FunctionApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("1200x600")
+    root.geometry("600x600")
 
     app = FunctionApp(root)
     inner_functions.app = app

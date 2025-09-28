@@ -123,10 +123,6 @@ def undirected_set(parse:bool, use_filter:bool, output:int, duplication:int, key
     #Report
     fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("UNDIRECTED"), columns=["KEYS","COUNT","VALUES"])
         
-
-
-
-
 def directed_set(parse:bool, use_filter:bool, output:int, keys:str):
     global internal
     global stage
@@ -224,14 +220,6 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
     fs.create_csv_output(data=aggregates, file_name=app.choose_file_name("MATCH"), columns=["KEY","COUNT","VALUE"])
 
 
-def clean_bsf_files():
-
-    pass
-
-
-
-
-
 
 
 
@@ -246,7 +234,6 @@ def upload_triggers(trigger):
         intended.append(['Decreased_Date'])
     elif trigger == 2:
         intended.append(['Departure_Date'])
-
     
     format = Format(intended_names=["UCI", "TRIGGER_DATE"], search_names=intended, intended_types=[np.int32, np.dtype('datetime64[D]')])
 
@@ -263,6 +250,33 @@ def upload_triggers(trigger):
             data = (convert_row_to_python(row) for row in data)
 
             ds.upload_triggers(data=data)
+
+
+
+
+def upload_events(clear:bool):
+    names = ["id", "UCI", "EVENT_TYPE", "EVENT_DATE", "EVENT_STAGE", "LAST_DATE"]
+    format = Format(intended_names=names, search_names=names, 
+                    intended_types=[np.int32, np.int32, str, np.dtype('datetime64[D]'), str, np.dtype('datetime64[D]')])
+
+    for file in app.iterate_selected_data(format):
+        for batch in app.updating_iterating_batches(file=file):
+
+            data = batch.data
+            data = (convert_row_to_python(row) for row in data)
+
+            ds.upload_events(data)
+
+
+
+
+
+
+
+
+
+
+
 
 def upload_files(clear:bool):
     
@@ -288,19 +302,7 @@ def upload_files(clear:bool):
 
 
 
-def upload_events(clear:bool):
-    names = ["id", "UCI", "EVENT_TYPE", "EVENT_DATE", "EVENT_STAGE"]
-    format = Format(intended_names=names, search_names=names, intended_types=[np.int32, np.int32, str, np.dtype('datetime64[D]'), str])
 
-    for file in app.iterate_selected_data(format):
-        for batch in app.updating_iterating_batches(file=file):
-
-            data = batch.data
-            data = (convert_row_to_python(row) for row in data)
-
-            print(data)
-
-            ds.upload_events(data)
     
 
 

@@ -1,254 +1,138 @@
+
 CREATE TABLE trigger_types(
-    id          LONG PRIMARY KEY,
-    label       TEXT(50)
+    id          BYTE PRIMARY KEY,
+    name        TEXT(20)
 );
 
-CREATE TABLE offices(
-    id         AUTOINCREMENT PRIMARY KEY,
-    label      TEXT(50)
+INSERT INTO trigger_types(id, name) VALUES (0, 'Citizenship')
+INSERT INTO trigger_types(id, name) VALUES (1, 'Deceased')
+INSERT INTO trigger_types(id, name) VALUES (2, 'Departure')
+
+CREATE TABLE triggers(
+    uci            LONG,
+    trigger_type   BYTE,
+    trigger_date   DATE,
+    PRIMARY KEY (uci, trigger_type, trigger_date),
+    CONSTRAINT triggers1 FOREIGN KEY (trigger_type) REFERENCES trigger_types(id)
 );
+
+CREATE TABLE temp_triggers(
+    uci            LONG,
+    trigger_type   BYTE,
+    trigger_date   DATE
+);
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+
+
+CREATE TABLE event_types(
+    id          AUTOINCREMENT PRIMARY KEY,
+    name        TEXT(50)
+);
+
+CREATE TABLE event_stages(
+    id          AUTOINCREMENT PRIMARY KEY,
+    name        TEXT(50)
+);
+
+CREATE TABLE events(
+    id               LONG PRIMARY KEY,
+    uci              LONG,
+    event_type       INT,
+    event_stage      INT,
+    event_date       DATE,
+    last_date        DATE,
+    CONSTRAINT events1 FOREIGN KEY (event_type) REFERENCES event_types(id),
+    CONSTRAINT events2 FOREIGN KEY (event_stage) REFERENCES event_stages(id)
+);
+
+CREATE TABLE temp_events(
+    id               LONG,
+    uci              LONG,
+    event_type       TEXT(50),
+    event_stage      TEXT(50),
+    event_date       DATE,
+    last_date        DATE
+);
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
 
 CREATE TABLE locations(
     id          AUTOINCREMENT PRIMARY KEY,
-    label        TEXT(50),
-    is_offsite     YESNO,
-    is_officer     YESNO
+    name        TEXT(100),
+    is_offsite  YESNO,
+    is_officer  YESNO,
+    is_internal YESNO
 );
 
-CREATE TABLE event_types(
-    id      AUTOINCREMENT PRIMARY KEY,
-    label   TEXT(50)
+CREATE TABLE offices(
+    id           INT PRIMARY KEY,
+    name         TEXT(100),
+    is_internal  YESNO
 );
 
-CREATE TABLE event_stages(
-    id      AUTOINCREMENT PRIMARY KEY,
-    label   TEXT(50)
+CREATE TABLE projects(
+    id           INT PRIMARY KEY,
+    name         TEXT(100)
 );
-
-CREATE TABLE criminality_types(
-    id     AUTOINCREMENT PRIMARY KEY,
-    label  TEXT(50)
-);
-
-
-INSERT INTO trigger_types (id, label) VALUES (0, 'Citizenship');
-INSERT INTO trigger_types (id, label) VALUES (1, 'Deceased');
-INSERT INTO trigger_types (id, label) VALUES (2, 'Departure');
-
-CREATE TABLE temp_triggers(
-    uci LONG,
-    trigger_date DATE,
-    trigger_type LONG
-);
-
-CREATE TABLE triggers (
-    uci          LONG,
-    trigger_date DATE,
-    trigger_type LONG,
-    PRIMARY KEY (uci, trigger_date, trigger_type),
-    CONSTRAINT triggers_trigger_type FOREIGN KEY (trigger_type) REFERENCES trigger_types(id)
-);
-
-CREATE TABLE temp_files(
-    uci          LONG,
-    volumes      BYTE,
-    is_temp      TEXT(1),
-    office       TEXT(100),
-    location     TEXT(100)
-);
-
-CREATE TABLE files(
-    id           AUTOINCREMENT PRIMARY KEY,
-    uci          LONG,
-    volumes      BYTE,
-    is_temp      YESNO,
-    office       LONG,
-    location     LONG,
-    CONSTRAINT files_offices FOREIGN KEY (office) REFERENCES offices(id),
-    CONSTRAINT files_locations FOREIGN KEY (location) REFERENCES locations(id)
-);
-
-
-CREATE TABLE temp_events(
-    uci         LONG,
-    event_date  DATE,
-    event_type  LONG,
-    event_stage LONG
-);
-
-
-
-
-CREATE TABLE events(
-    id          LONG PRIMARY KEY
-    uci         LONG,
-    event_date  DATE,
-    event_type  LONG,
-    event_stage LONG,
-    CONSTRAINT events_event_type FOREIGN KEY (event_type) REFERENCES event_types(id),
-    CONSTRAINT events_event_stage FOREIGN KEY (event_stage) REFERENCES event_stages(id)
-);
-
-
-
-
-
-
-
-
-
-
-CREATE TABLE boxes(
-    id                 AUTOINCREMENT PRIMARY KEY,
-    label              TEXT(30),
-    destruction_date   DATE,
-    status             LONG,
-
-
-
-
-);
-
-
-
-
-CREATE TABLE dispositions(
-    id           AUTOINCREMENT PRIMARY KEY,
-    uci          LONG,
-    main_volumes LONG,
-    temp_volumes LONG,
-
-);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 CREATE TABLE box_types(
-    id         LONG PRIMARY KEY,
-    label      TEXT(50)
+    id          INT PRIMARY KEY,
+    name        TEXT(100)    
 );
 
+CREATE TABLE box_stages(
+    id         INT PRIMARY KEY,
+    name       TEXT(100)
+);
 
-INSERT INTO box_types(id, label) VALUES (1, '');
-INSERT INTO box_types(id, label) VALUES (2, '');
-INSERT INTO box_types(id, label) VALUES (3, '');
-INSERT INTO box_types(id, label) VALUES (4, '');
-INSERT INTO box_types(id, label) VALUES (5, '');
-INSERT INTO box_types(id, label) VALUES (6, '');
-
-
-
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
 
 CREATE TABLE boxes(
-    id                   AUTOINCREMENT PRIMARY KEY,
-    label                TEXT(20),
-    destruction_date     DATE,
-    project              LONG,
-    destruction_type     LONG,
-    box_type             LONG,
-    location             LONG,
-    CONSTRAINT boxes_location FOREIGN KEY (location) REFERENCES offices(id),
-    CONSTRAINT boxes_box_type FOREIGN KEY (box_type) REFERENCES box_types(id)
+    id                        AUTOINCREMENT PRIMARY KEY,
+    office                    INT,
+    location                  LONG,
+
+    project                   INT,
+    box_type                  INT, --Practical Type
+    box_subtype               INT, --Superficial Type
+
+    name                      TEXT(50),
+    stage                     INT,
+    intended_destruction_date DATE,
+
+
+
+
+
+    
+    CONSTRAINT boxes1 FOREIGN KEY office REFERENCES offices(id),
+    CONSTRAINT boxes2 FOREIGN KEY project REFERENCES project(id),
+    CONSTRAINT boxes3 FOREIGN KEY stage REFERENCES box_stages(id),
+    CONSTRAINT boxes4 FOREIGN KEY location REFERENCES locations(id),
+    CONSTRAINT boxes5 FOREIGN KEY box_type REFERENCES box_types(id),
+    CONSTRAINT boxes6 FOREIGN KEY box_subtype REFERENCES box_types(id)
 );
 
+CREATE TABLE dispositions(
+    uci                       LONG,
+    box                       LONG,
+    volumes                   BYTE,
+    volumes_temp              BYTE,
+    last_event_date           DATE,
+    intended_destruction_date DATE,
 
+    PRIMARY KEY (uci, box),
 
+    CONSTRAINT dispositions1 FOREIGN KEY box REFERENCES boxes(id) 
 
-
-INSERT INTO box_types(id), label
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-CREATE TABLE event_types(
-    id            LONG PRIMARY KEY,
-    label         TEXT(50)
 );
-
-INSERT INTO event_types(id, label)
-VALUES (1, "Detention Hold")
-
-CREATE TABLE event_stages(
-    id            LONG PRIMARY KEY,
-    label         TEXT(50)
-);
-INSERT INTO event_stages(id, label)
-VALUES (1, "Concluded")
-
-CREATE TABLE events(
-    uci             LONG,
-    start_date      DATE,
-    event_type      INT,
-    event_stage     INT,
-    PRIMARY KEY (uci, start_date, event_type),
-    CONSTRAINT events_type FOREIGN KEY (event_type) REFERENCES event_types(id)
-);
-
-
-
-CREATE TABLE boxes(
-    id               LONG,
-    [label]          TEXT(20),
-    destruction_date DATE,
-    [type]           INT,
-    [location]       INT
-);
-
-
-
-
-
-
 
 
 
@@ -259,17 +143,162 @@ CREATE TABLE boxes(
 
 
 CREATE TABLE criminality_types(
-    id             LONG,
-    [label]        TEXT(50),
-    is_destroyable YESNO
-)
+    id          INT PRIMARY KEY,
+    name        TEXT(50)
+);
+
+CREATE TABLE box_types(
+    id          INT PRIMARY KEY,
+    name        TEXT(50)
+);
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+
+
+
+CREATE TABLE storage_stages(
+    id          INT PRIMARY KEY,
+    name        TEXT(30)
+);
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+
+CREATE TABLE locations(
+    id          INT PRIMARY KEY,
+    name        TEXT(100),
+    is_offsite  YESNO,
+    is_officer  YESNO,
+    is_internal YESNO
+);
+
+CREATE TABLE offices(
+    id           INT PRIMARY KEY,
+    name         TEXT(100),
+    is_internal  YESNO
+);
+
+CREATE TABLE projects(
+    id           INT PRIMARY KEY,
+    name         TEXT(100)
+);
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE destruction_approvals(
+
+);
+
+CREATE TABLE box_removals(
+
+);
+
+
+CREATE TABLE boxes(
+
+);
+
+CREATE TABLE dispositions(
+
+);
+
+
+
+CREATE TABLE boxes(
+    id          AUTOINCREMENT PRIMARY KEY,
+    name        TEXT(20),
+    location    LONG,
+    office      INT,
+    project     INT,
+    box_type    BYTE,   --Having To Do With The Practial Contents (Defining Its Destruction, Use) 
+    box_subtype BYTE,   -- Specifying Subclassifications Of Type (IE Year Range)
+    intended_destruction_date
+);
+
+
+CREATE TABLE approvals(
+    id            AUTOINCREMENT PRIMARY KEY,
+    box           LONG,
+    approval_date DATE,
+
+
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE boxes(
+    id                AUTOINCREMENT PRIMARY KEY,
+    name              TEXT(20),
+    location          LONG,
+    office            LONG,
+    project           BYTE,
+    box_type          BYTE,
+    destruction_date  DATE,
+    destruction_stage BYTE,
+    CONSTRAINT boxes1 FOREIGN KEY (location) REFERENCES locations(id),
+    CONSTRAINT boxes2 FOREIGN KEY (office) REFERENCES offices(id),
+    CONSTRAINT boxes3 FOREIGN KEY (box_type) REFERENCES box_types(id),
+    CONSTRAINT boxes4 FOREIGN KEY (destruction_stage) REFERENCES destruction_stages(id)
+);
+
+
+
+
 
 
 CREATE TABLE dispositions(
-    uci               LONG,
-    [box]             TEXT(20),
-    vols_main         INT,
-    vols_temp         INT,
-    destruction_date  DATE,
-    is_destroyed         YESNO
+    id               AUTOINCREMENT PRIMARY KEY,
+    uci              LONG,
+    box              LONG,
+    main_vols        BYTE,
+    temp_vols        BYTE,
+    disposition_date DATE,
+    starting_date    DATE,
+    duration         BYTE,
+    CONSTRAINT dispositions1 FOREIGN KEY (box) REFERENCES boxes(id)
 );
+
+-- |----------|---------|-------------|------------|-------------|-----------|-------------|
+-- |- - - - - |- - - - -| - - - - - - |- - - - - - |- - - - - - -| - - - - - |- - - - - - -| -
+-- |----------|---------|-------------|------------|-------------|-----------|-------------|
+
+
+INSERT INTO destruction_stages(id, name) VALUES (0, 'Problematic')
+INSERT INTO destruction_stages(id, name) VALUES (1, 'Prepared')
+INSERT INTO destruction_stages(id, name) VALUES (2, 'Ready')
+INSERT INTO destruction_stages(id, name) VALUES (3, 'Approved')
+INSERT INTO destruction_stages(id, name) VALUES (4, 'Destroyed')
+
+
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
+-- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
+-- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --

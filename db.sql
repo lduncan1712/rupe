@@ -108,10 +108,6 @@ CREATE TABLE boxes(
     intended_destruction_date DATE,
 
 
-
-
-
-    
     CONSTRAINT boxes1 FOREIGN KEY office REFERENCES offices(id),
     CONSTRAINT boxes2 FOREIGN KEY project REFERENCES project(id),
     CONSTRAINT boxes3 FOREIGN KEY stage REFERENCES box_stages(id),

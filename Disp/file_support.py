@@ -212,6 +212,8 @@ def iterate_range(rng:Any, format:Format, offset:int = 0) -> Iterator[BatchData]
         for col_id, dtype in zip(format.intended_indexs, format.intended_types):
             batch_column = ws.Range(ws.Cells(r_start, c_first+col_id), ws.Cells(r_end, c_first+col_id))
                
+            print(batch_column.Value)
+            
             np_columns.append(np.array(batch_column.Value, dtype=dtype).reshape(-1))
     
         #dtype = np.dtype(list(zip(format.intended_names, format.intended_types)))
@@ -242,8 +244,8 @@ def iterate_areas(rng:Any, format:Format) -> Iterator[BatchData]:
 
 def iterate_csv(csv:Any, format:Format) -> File:
     
-    names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
-    format.intended_indexs, valid = validate_schema(found_names=names, format=format)
+    format.found_names = [col.strip().lstrip("\ufeff") for col in csv.readline().strip().split(",")]
+    format.intended_indexs, valid = validate_schema(format=format)
     iterator = iterate_rows(csv=csv, format=format)
     rows = get_row_counts(type="CSV", data=csv)
     return File(rows=rows, data=iterator, valid=valid)
@@ -253,16 +255,38 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
     rows = []
     r_cumulative = 0
 
-    temp_intended = format.intended_types[0][1] if len(format.intended_types) == 1 else temp_intended
+
+    temp_intended = format.intended_types[0] if len(format.intended_types) == 1 else list(zip(format.intended_names,format.intended_types))
+    print(temp_intended)
 
     for line in csv:
         row = line.rstrip("\n").split(",")
-        row = [row[i] for i in format.intended_indexs]
+
+
+        #row = [row[i] for i in format.intended_indexs]
+
+        row = [
+                None if not row[i] or isinstance(row[i], np.void) else getattr(row[i], "item", lambda: row[i])()
+                for i in format.intended_indexs
+        ]
+
+        #row = [cell if cell.strip() != "" else None for cell in line]
+
+
+
+        print("ROW:")
+        print(row)
+
+        #row = [None if not row[i].strip() else row[i] for i in format.intended_indexs]
+
+
         rows.append(row)
         r_cumulative += 1
 
         if r_cumulative == BATCH_SIZE:
+            rows = [list(row) for row in rows]
             data = np.array(rows, dtype=temp_intended)
+
             valid = validate_data(format=format, data=data, is_excel=False)
 
             yield BatchData(data=data, rows=BATCH_SIZE, valid=valid)
@@ -270,7 +294,11 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
             r_cumulative = 0
 
     if not r_cumulative == 0:
+        rows = [list(row) for row in rows]
         data = np.array(rows, dtype=temp_intended)
+
+        print("CREAING ARRAY")
+        print(data)
         valid = validate_data(format=format, data=data, is_excel=False)
 
         yield BatchData(data=data, rows=r_cumulative, valid=valid)

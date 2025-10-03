@@ -41,23 +41,11 @@
             },
             "fields": ["Keys", "Values"]
         },
-        "upload_files": {
-            "name": "Upload Files",
-            "description": "TODO",
-            "checkboxes": ["Clear Existing"]
-        },
-        "upload_dispositions": {
-            "name": "Upload Disposition",
-            "description": "TODO",
-            "checkboxes": ["Clear Existing", "Use Filter", "Immigration Hold (2009+)", "BackFill"],
-            "dropdowns": {
-                "Destruction": [24,25,26,27,28,29,30,31,32,33,34,35] 
-            }
-        },
+
+
         "upload_events": {
             "name": "Upload Events",
-            "description": "TODO",
-            "checkboxes": ["Clear Existing"]
+            "description": "TODO"
         },
         "upload_triggers": {
             "name": "Upload Triggers",
@@ -65,6 +53,29 @@
             "dropdowns": {
                 "Trigger": ["Citizenship", "Deceased", "Departure"]
             }
+        },
+
+        "upload_dispositions": {
+            "name": "Upload Disposition",
+            "description": "TODO",
+            "checkboxes": ["Use Filter"],
+            "dropdowns": {
+                "Box Type": ["Non Hold", "Imm Hold (2009+)"],
+                "Box Sub-Type": ["Year Duration", "Backfill Years"],
+                "Destruction": [24,25,26,27,28,29,30,31,32,33,34,35] 
+            }
+        },
+
+
+
+
+
+
+        "upload_files": {
+            "name": "Upload Files",
+            "description": "TODO",
+            "checkboxes": ["Clear Existing"]
         }
+        
     }
 }

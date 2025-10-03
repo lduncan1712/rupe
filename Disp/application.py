@@ -66,7 +66,7 @@ class FunctionApp:
         
         self.left_frame = tk.Frame(self.root, width=200, bg="#f0f0f0")
         self.middle_frame = tk.Frame(self.root, width=200, bg="#f0f0f0")
-        self.right_frame = tk.Frame(self.root, width=300, bg="#f0f0f0")
+        self.right_frame = tk.Frame(self.root, width=500, bg="#f0f0f0")
         self.left_frame.pack(side="left", fill="both", expand=False)
         self.middle_frame.pack(side="left", fill="both", expand=False)
         self.right_frame.pack(side="left", fill="both", expand=True)
@@ -294,8 +294,7 @@ class FunctionApp:
                 n = self.create_node(item.name, tag="FOLDER", parent=root, fullPath=item.path)
                 self.add_cascade_nodes(root=n, path=item.path)
             else:
-                print(item)
-                self.show_message(message="Unknown Object Within Folder")
+                self.show_message(message="Unknown Object Within Folder:" + item.path)
 
     def create_node(self, name:str, tag:str, parent:str, fullPath:str) -> str:
         n = self.right_tree.insert(parent, 'end', iid=self.get_next_node_id(), text=name, tags=(tag,), open=True)
@@ -361,6 +360,11 @@ class FunctionApp:
     #-----------------------------------------------------------------
     def add_items(self):
         is_selectionFolder = messagebox.askyesno('', self.text["choice_label"])
+
+        self.progress["value"] = 5
+        self.progress_label.config(text="Adding..")
+
+        
         if is_selectionFolder:
             paths = self.select_file_or_folder('FOLDER')
             tag = "FOLDER"
@@ -374,6 +378,8 @@ class FunctionApp:
             paths = [path for path in paths if not fs.determine_type(paths[0]) is None]
             self.add_parellel_nodes(root=self.root_node, paths=paths)
         self.update_counts()
+        self.progress["value"] = 100
+        self.progress_label.config(text="Upload Completed")
 
     def remove_items(self):
         selected = self.right_tree.focus()
@@ -558,7 +564,7 @@ class FunctionApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("600x600")
+    root.geometry("900x600")
 
     app = FunctionApp(root)
     inner_functions.app = app

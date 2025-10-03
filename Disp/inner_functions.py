@@ -204,14 +204,19 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
         total_count = len(values)
         if (output == 0) or (output == 1 and total_count == 1) or (output == 2 and total_count > 1):
 
-            if total_count == 1:
+            if False: #total_count == 1:
                 aggregates.append([key, 1, values[0]])
             elif aggregate in [0,2]:
                 print(values)
                 aggregates.append([key, total_count, ';'.join(map(str,values))])
             else:
-                if aggregate == 1:
-                    aggregates.append([key,  total_count, sum(values)])
+                if None in values: 
+                    aggregates.append([key, total_count, 'None'])
+                elif aggregate == 1:
+                    try:
+                        aggregates.append([key,  total_count, sum(values)])
+                    except:
+                        aggregates.append([key, total_count, None])
                 elif aggregate == 3:
                     aggregates.append([key, total_count, max(values)])
                 elif aggregate == 4:
@@ -251,10 +256,7 @@ def upload_triggers(trigger):
 
             ds.upload_triggers(data=data)
 
-
-
-
-def upload_events(clear:bool):
+def upload_events():
     names = ["id", "UCI", "EVENT_TYPE", "EVENT_DATE", "EVENT_STAGE", "LAST_DATE"]
     format = Format(intended_names=names, search_names=names, 
                     intended_types=[np.int32, np.int32, str, np.dtype('datetime64[D]'), str, np.dtype('datetime64[D]')])
@@ -267,8 +269,8 @@ def upload_events(clear:bool):
 
             ds.upload_events(data)
 
-
-
+def upload_dispositions():
+    pass
 
 
 

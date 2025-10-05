@@ -85,10 +85,20 @@ CREATE TABLE box_types(
     name        TEXT(100)    
 );
 
+INSERT INTO box_types(id, name) VALUES (0, 'Non Hold');
+INSERT INTO box_types(id, name) VALUES (1, 'Imm Hold (2009+)');
+INSERT INTO box_types(id, name) VALUES (2, 'Year Duration');
+INSERT INTO box_types(id, name) VALUES (3, 'Backfill Years');
+
 CREATE TABLE box_stages(
     id         INT PRIMARY KEY,
     name       TEXT(100)
 );
+
+INSERT INTO box_stages(id, name) VALUES (0, 'Created');
+INSERT INTO box_stages(id, name) VALUES (1, 'Applicable For Destruction');
+INSERT INTO box_stages(id, name) VALUES (2, 'Approved For Destruction');
+INSERT INTO box_stages(id, name) VALUES (3, 'Destroyed')
 
 -- |-----------|-----------|-----------|-----------|-----------|-----------|-----------| --
 -- |- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -|- - - - - -| --
@@ -100,13 +110,12 @@ CREATE TABLE boxes(
     location                  LONG,
 
     project                   INT,
-    box_type                  INT, --Practical Type
-    box_subtype               INT, --Superficial Type
+    box_type                  INT, 
+    box_subtype               INT,
 
     name                      TEXT(50),
     stage                     INT,
     intended_destruction_date DATE,
-
 
     CONSTRAINT boxes1 FOREIGN KEY office REFERENCES offices(id),
     CONSTRAINT boxes2 FOREIGN KEY project REFERENCES project(id),
@@ -125,9 +134,7 @@ CREATE TABLE dispositions(
     intended_destruction_date DATE,
 
     PRIMARY KEY (uci, box),
-
     CONSTRAINT dispositions1 FOREIGN KEY box REFERENCES boxes(id) 
-
 );
 
 

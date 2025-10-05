@@ -68,8 +68,10 @@ class OrderedSet:
     def max(self):
         return max(self.items)
 
-def evaluate_uci(s: str) -> str:
+def evaluate_uci(s:str) -> str:
     s_str = str(s)
+    if s_str.endswith(".0"):
+        s_str = s_str[:-2]
     stem = format_1.sub('', s_str)
     if format_2.match(stem):
         return stem if len(stem) in (8, 10) else stem[4:]
@@ -186,10 +188,10 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
         for batch in app.updating_iterating_batches(file=file):
             data = batch.data
 
-            print(data)
+            print(data.dtype)
 
             if parse:
-                data[:,0] = UCI_PARSE(data[:,0])
+                data['KEY'] = UCI_PARSE(data['KEY'])
 
             if aggregate in [0,1]:
                 for row in data:
@@ -204,9 +206,7 @@ def match_col(parse:bool, use_filter:bool, output:int, aggregate:int, keys:str, 
         total_count = len(values)
         if (output == 0) or (output == 1 and total_count == 1) or (output == 2 and total_count > 1):
 
-            if False: #total_count == 1:
-                aggregates.append([key, 1, values[0]])
-            elif aggregate in [0,2]:
+            if aggregate in [0,2]:
                 print(values)
                 aggregates.append([key, total_count, ';'.join(map(str,values))])
             else:

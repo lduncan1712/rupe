@@ -263,12 +263,12 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
         row = line.rstrip("\n").split(",")
 
 
-        #row = [row[i] for i in format.intended_indexs]
+        row = [row[i] for i in format.intended_indexs]
 
-        row = [
-                None if not row[i] or isinstance(row[i], np.void) else getattr(row[i], "item", lambda: row[i])()
-                for i in format.intended_indexs
-        ]
+        #row = [
+        #        None if not row[i] or isinstance(row[i], np.void) else getattr(row[i], "item", lambda: row[i])()
+        #        for i in format.intended_indexs
+        #]
 
         #row = [cell if cell.strip() != "" else None for cell in line]
 
@@ -284,8 +284,12 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
         r_cumulative += 1
 
         if r_cumulative == BATCH_SIZE:
-            rows = [list(row) for row in rows]
-            data = np.array(rows, dtype=temp_intended)
+            np_columns = [np.array(col, dtype=dtype).reshape(-1)
+              for col, dtype in zip(np.array(rows).T, format.intended_types)]
+
+            # build record array
+            data = np.core.records.fromarrays(np_columns, names=format.intended_names)
+
 
             valid = validate_data(format=format, data=data, is_excel=False)
 
@@ -294,8 +298,12 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
             r_cumulative = 0
 
     if not r_cumulative == 0:
-        rows = [list(row) for row in rows]
-        data = np.array(rows, dtype=temp_intended)
+        np_columns = [np.array(col, dtype=dtype).reshape(-1)
+              for col, dtype in zip(np.array(rows).T, format.intended_types)]
+
+        # build record array
+        data = np.core.records.fromarrays(np_columns, names=format.intended_names)
+
 
         print("CREAING ARRAY")
         print(data)
@@ -310,15 +318,7 @@ def iterate_rows(csv:Any, format:Format) -> Iterator[BatchData]:
 def validate_schema(format:Format) -> Tuple[list[int], bool]:
     kept_indexs = []
 
-    print("INTENDED_NAMES")
-    print(format.intended_names)
-
-    print("FOUND NAMES")
-    print(format.found_names)
-
     for group in format.search_names:
-        print("LOOKING AT GROUP")
-        print(group)
         if len(group) == 1 and group[0].isdigit():
             c = int(group[0])
             if c >= 0 and c < len(format.found_names):
@@ -327,14 +327,12 @@ def validate_schema(format:Format) -> Tuple[list[int], bool]:
                 return kept_indexs, False
         else:    
             found_in_group = [format.found_names.index(x) for x in format.found_names if x in group]
-            print("Found In Group")
-            print(found_in_group)
-
             if len(found_in_group) == 1:
                 kept_indexs.append(found_in_group[0])
             else:
                 return kept_indexs, False
     return kept_indexs, True
+
 
 def validate_data(format:Format, data:NDArray, is_excel:bool=False) -> bool:
     for i, (n,t) in enumerate(zip(format.intended_names, format.intended_types)):
@@ -342,9 +340,7 @@ def validate_data(format:Format, data:NDArray, is_excel:bool=False) -> bool:
         intended_type = np.dtype(t)
         match = np.issubdtype(col_type, intended_type)
         if not match:
-            #But Its Excel, Its Intended To Be Integer, But Is Actually Floating
             if is_excel and np.issubdtype(intended_type, np.integer) and np.issubdtype(col_type, np.floating):
-                print("SHOULD BE TRYING TO CONVERT")
                 if np.all(np.modf(data[:,i] == 0)):
                     data[:, i] = data[:,i].astype(np.int32)
                 else:

@@ -69,6 +69,11 @@ class FunctionApp:
         self.fields =          {}
         self.checkboxes =      {}
 
+        self.rows_to_run =  None
+        self.files_to_run = None
+        self.rows_run  =    None
+        self.files_run =    None
+
         self.setup_settings()
         self.setup_frames()
 
@@ -114,9 +119,9 @@ class FunctionApp:
         self.left_tree.pack(fill='both', expand=True)
         self.left_tree.bind('<<TreeviewSelect>>', lambda e: self.populate_tabs())
 
-        parent_id = self.left_tree.insert('', 'end', text='//', open=True)
+        parent = self.left_tree.insert('', 'end', text='//', open=True)
         for func_key, func_data in self.text["functions"].items():
-            self.left_tree.insert(parent_id, 'end', text=func_data["name"], open=False, tags=func_key)
+            self.left_tree.insert(parent, 'end', text=func_data["name"], open=False, tags=func_key)
 
         self.btn_frame = tk.Frame(self.left_frame)
         self.btn_frame.pack(side='bottom', fill='x', pady=10, padx=10)
@@ -150,8 +155,8 @@ class FunctionApp:
         self.progress_label = tk.Label(top_row, text="...")
         self.progress_label.pack(side="left", padx=5)
 
-        self.progress = ttk.Progressbar(bottom, orient="horizontal", length=150, mode="determinate")
-        self.progress.pack(side="top", fill="x") 
+        self.progress_bar = ttk.Progressbar(bottom, orient="horizontal", length=150, mode="determinate")
+        self.progress_bar.pack(side="top", fill="x") 
 
     def setup_right(self) -> None:
         """Sets Right Frame Containing File Tree And File Summary Info"""
@@ -188,8 +193,10 @@ class FunctionApp:
         self.right_tree.bind('<ButtonRelease-1>', lambda e: self.root.after(50, on_check))
      
         self.root_node = self.right_tree.insert('', 'end', text='Root', tags=("FOLDER",), open=True)
+
         for path in self.imported_paths:
-            node = self.get_or_create_node(path=path, tag=fs.determine_type(path), parent=self.root_node,  fullPath=path)
+            node = self.get_node(path=path, tag=fs.determine_type(path), parent=self.root_node, full_path=path)
+
         self.imported_paths.clear()
 
         info_frame = tk.Frame(self.right_frame)
@@ -254,95 +261,133 @@ class FunctionApp:
         """Displays Custom Information"""
 
         messagebox.showinfo("Information", message, parent=self.root)
-
     #----------------------------------------------------------------
     #----------------------------------------------------------------
     #----------------------------------------------------------------
 
-    def get_or_create_node(self, path:str, tag:str, parent_id:str, fullPath:str) -> str:
-        """Returns Node Corrasponding To Path In Right Tree, Creating Missing Nodes"""
-
-        parts = path.replace("\\","/").split("/")
-        length = len(parts)
-        for index, part in enumerate(parts):
-            is_last = (index == length - 1)
-            children = {self.right_tree.item(c)["text"]: c for c in self.right_tree.get_children(parent_id)}
-            if part in children:
-                parent = children[part]
-            else:
-                parent = self.create_node(name=part, tag=tag if is_last else "FOLDER", parent=parent, fullPath=fullPath) 
-        return parent
-    
-    def add_parellel_nodes(self, root:str, paths:List) -> None:
-        """Adds Sibling Nodes From Common Stem"""
-
-        length_paths = len(paths)
-
-        if length_paths > 0:
-            first = paths[0]
-            tag = fs.determine_type(first)
-            node = self.get_or_create_node(paths[0],tag=fs.determine_type(first) ,parent=root, fullPath=first)
+    def get_node(self, parent:str, path:str, full_path:str, tag:str) -> str:
+        """Returns The Node Extending Along Specified Path In Right Tree"""
         
-        if length_paths > 1:
-            existing_children = {self.right_tree.get_children(self.right_tree.parent(node))}
-            for name in paths:
-                base = fs.get_basename(name)
-                if not base in existing_children:
-                    c = self.create_node(name=base, tag=fs.determine_type(base), parent=root, fullPath=name)
+        path_parts = path.replace("\\", "/").split("/")
+        path_len = len(path_parts)
+        new_parent = parent
 
-    def add_cascade_nodes(self, root:str, path:str) -> None:
-        """Insert A Set Of Nested Files And Folders"""
+        for index, part in enumerate(path_parts):
+            children = {self.right_tree.item(c)["text"]: c for c in self.right_tree.get_children(new_parent)}
 
-        for item in fs.iterate_dir(path):
-            item_name = item.name
-            item_path = item.path
-
-            if item.is_file():
-                item_type  = fs.determine_type(path=item_name)
-                if item_type is None: continue
-                self.create_node(item_name, tag=type, parent=root, fullPath=item_path)
-            elif item.is_dir():
-                n = self.create_node(item_name, tag="FOLDER", parent=root, fullPath=item_path)
-                self.add_cascade_nodes(root=n, path=item_path)
+            if part in children:
+                new_parent = children[part]
             else:
-                self.show_message(message="Unknown Object Within Folder:" + item_path + "Skipping")
+                used_tag = tag if index == path_len - 1 else "FOLDER"
+                new_parent = self.create_node(parent=new_parent, path=part, full_path=full_path, tag=used_tag)
 
-    def create_node(self, name:str, tag:str, parent:str, fullPath:str) -> str:
-        """Inserts Individual Node Corrasponding To Folder Or File Into Right Tree"""
+        return new_parent
 
-        n = self.right_tree.insert(parent, 'end', iid=self.get_next_id(), text=name, tags=(tag,), open=True)
+    def create_node(self, parent:str, path:str, full_path:str, tag:str) -> str:
+        """Creates A Node Representing A File Or Folder In Specified Position In Right Tree"""
 
+        n = self.right_tree.insert(parent, 'end', text=path, tags=(tag,), open=True)
+
+        print("CREATING NODE:" + path)
+        
         self.item_counts[tag] += 1
         self.item_set[tag].add(n)
-        
-        if tag in file_keys:
-            self.file_links[n] = fullPath
 
-        if tag == "EXCEL": 
-            self.create_subnodes(path=fullPath, tag="EXCEL", parent=n)
+        if tag in file_keys:
+            self.file_links[n] = full_path
+            if tag == "EXCEL":
+                self.create_subnodes(full_path=full_path, tag=tag, parent=n)
 
         return n
-    
-    def create_subnodes(self, path:str, tag:str, parent:Any) -> None:
-        """Creates A Node Corrasponding To Subfile Into Right Tree"""
 
-        try:
-            file = fs.open_file(type=tag, path=path, app=self.applications[tag], read=True)
+    def create_subnodes(self, parent:str, full_path:str, tag:str) -> None:
+        """Creates A Node Representing A SubFile In Specified Position In Right Tree"""
+
+        file = fs.open_file(type=tag, path=full_path, app=self.applications[tag], read=True)
+
+        if file is None:
+            self.show_message("Unable To Open File With Subfiles: " + full_path + " Removing From Tree")
+            self.remove_node(node=parent, up=False, remove_self=True)
+        else:
             subitems = fs.get_subfiles(type=tag, file=file)
 
             for item in subitems:
-                n = self.create_node(name=item, tag='EXCEL-SHEET', parent=parent, fullPath=path)
+                n = self.create_node(path=item, tag='EXCEL-SHEET', parent=parent, full_path=None)
                 self.sheet_links[n] = parent
                 self.sheet_names[n] = item
-        except:
-            self.show_message(f"Error Adding SubFiles Of {path}")
 
-        finally:
-             fs.close_file(type=tag, file=file)
-        
+    def create_sibling_nodes(self, root:str, paths:list) -> None:
+        """Efficiently Adds Valid Children Nodes To Right Tree By Starting From Shared Root"""
+
+        nodes_len = len(paths)
+
+        #Generate The First Sibling Node
+        if nodes_len > 0:
+            first = paths[0]
+            tag = fs.determine_type(first)
+            node = self.get_node(parent=root, path=first, full_path=first, tag=tag)
+
+        if nodes_len < 2: return 
+
+        #If It Was Successfully Added, Use Its Parent As Root For Rest
+        if self.right_tree.exists(node):
+
+            parent = self.right_tree.parent(node)
+            children = [self.right_tree.item(c, "text") for c in self.right_tree.get_children(parent)]
+
+            for path in paths[1:]:
+                name = fs.get_basename(path)
+
+                if not name in children:
+
+                    tag = fs.determine_type(path)
+
+                    if not tag is None:
+                        n = self.create_node(parent=parent, path=name, full_path=path, tag=tag)
+
+        #If It Wasnt Successfully Added, Rerun Without It
+        else:
+            self.create_parellel_nodes(root=root, paths=paths[1:])
+
+    def create_nested_nodes(self, root:str, path:str) -> None:
+        """Adds All Nested Valid Files And Folders Into Right Tree"""
+
+        items = list(fs.iterate_dir(path))
+
+        file_paths = [item.path for item in items if item.is_file()]
+        folder_paths = [item.path for item in items if item.is_dir()]
+
+        if file_paths:
+
+            for path in file_paths:
+                path_name = fs.get_basename(path)
+                tag = fs.determine_type(path)
+
+                if not tag is None:
+                    
+                    #print("Creating File Node:" + path)
+
+                    n = self.create_node(parent=root, path=path_name, full_path=path, tag=tag)
+
+        if folder_paths:
+
+            for folder in folder_paths:
+
+                folder_name = fs.get_basename(folder)
+
+                n = self.create_node(parent=root, path=folder_name, full_path=folder, tag="FOLDER")
+
+                #CASE WHERE FOLDER GETS REMOVED,ROOT?, 
+
+                existing_children = self.right_tree.get_children(root)
+                match = [n for n in existing_children if self.right_tree.item(n, "text") == folder_name]
+
+                if match:
+                    self.create_nested_nodes(root=n, path=folder)
+
     def remove_node(self, node:str, up:bool, remove_self:bool) -> None:
-        """Removes A Node From Right Tree"""
-
+        """Removes Specified Node From Tree"""
+        
         if up:
             while node:
                 parent = self.right_tree.parent(node)
@@ -351,7 +396,7 @@ class FunctionApp:
                 node = parent
 
         for child in self.right_tree.get_children(node):
-            self.remove_node(child, False,True)
+            self.remove_node(node=child, up=False, remove_self=True)
 
         if remove_self:
             tag = self.right_tree.item(node, "tags")[0]
@@ -361,14 +406,13 @@ class FunctionApp:
 
             self.right_tree.delete(node)
 
+            print("REMOVE NODE: " + node)
+
             self.file_links.pop(node, None)
             self.sheet_links.pop(node, None)
             self.sheet_names.pop(node, None)
-    
-    def get_next_id(self) -> int:
-        """Obtains The Next Unique Node For Right Tree"""
-        self.counter += 1
-        return self.counter
+
+    #--------------------------------------------------------------
 
     def get_selected_type(self, type:str) -> Union[dict, set]:
         """Obtains The Ids Of Selected Nodes Of Specified Type"""
@@ -389,10 +433,10 @@ class FunctionApp:
 
     def update_progress(self, progress:int = None, subprogress:int = None, label:str = None, new_subprogress:bool = False):
         """Handles Visual Task Progression For Absolute And Incremental Updates"""
-    
+
         #Set Using Absolue Value And Label        
         if not label is None :
-            self.progress_label.config(text:=label)
+            self.progress_label.config(text=label)
             self.progress_bar["value"] = progress
         else:
             #Iterating New File
@@ -401,12 +445,12 @@ class FunctionApp:
                 self.rows_run = 0
                 self.rows_to_run = subprogress
                 self.progress_bar["value"] = 5 + 70*((self.files_run - 1)/self.files_to_run)
-                self.progress_label.config(text:="0/" + self.rows_to_run)
+                self.progress_label.config(text="0/" + self.rows_to_run)
 
             #Iterating Data In File
-            else:
+            elif not subprogress is None:
                 self.rows_run += subprogress
-                self.progress_label.config(text:=self.rows_run + "/" + self.rows_to_run)
+                self.progress_label.config(text=self.rows_run + "/" + self.rows_to_run)
 
     def run_function(self):
         """Runs The Currently Selected Function"""
@@ -419,35 +463,32 @@ class FunctionApp:
         field_values =        [entry.get() for field, entry in self.fields.items()]
         checkbox_states =     [var.get() for option, var in self.checkboxes.items()]
 
-        self.update_progress(progress:=0, label:="...")
+        self.update_progress(progress=0, label="...")
 
         globals()[function_key](*[*checkbox_states, *dropdown_values, *field_values])
 
-        self.update_progress(progress:=100, label:="Complete")
-
-
+        self.update_progress(progress=100, label="Complete")
 
     def add_items(self):
         """Adds Files And Folders Into Right Tree"""
 
-        self.update_progress(progress:=10, label:="Adding...")
+        self.update_progress(progress=30, label="Adding...")
+        get_folder = messagebox.askyesno('', self.text["choice_label"])
 
-        is_folder = messagebox.askyesno('', self.text["choice_label"])
-        paths = self.select_file_or_folder('FOLDER' if is_folder else 'FILE')
-
-        if is_folder:
-            folderNode = self.get_or_create_node(paths,tag="FOLDER",parent=self.root_node, fullPath=paths)
-            self.remove_node(node=folderNode, up=False, remove_self=False) 
-            #folderNode = self.get_or_create_node(paths,tag=tag,parent=self.root_node, fullPath=paths)  #BUG FIX
-            self.add_cascade_nodes(root=folderNode, path=paths)
+        if get_folder:
+            folder =  filedialog.askdirectory(title="(*) Select Folder")
+            if folder:
+                n = self.get_node(parent=self.root_node, path=folder, full_path=folder, tag="FOLDER")
+                self.remove_node(node=n, up=False, remove_self=False)
+                self.create_nested_nodes(root=n, path=folder)
 
         else:
-            paths = [path for path in paths if not fs.determine_type(paths[0]) is None]
-            self.add_parellel_nodes(root=self.root_node, paths=paths)
+            files = filedialog.askopenfilenames(title= "(*) Select File(s)")
+            if files:
+                self.create_sibling_nodes(root=self.root_node, paths=files)
 
         self.update_counts()
-        self.update_progress(progress:=100, label:="Upload Complete")
-
+        self.update_progress(progress=100, label="Upload Complete")
 
     def remove_items(self):
         "Removes Selected Files And Folders"
@@ -463,7 +504,7 @@ class FunctionApp:
 
         selected = self.right_tree.focus()
 
-        if selected and selected != self.root_node: return
+        if not selected or selected == self.root_node: return
         
         if selected in self.item_set["EXCEL-SHEET"]:
             selected = self.right_tree.parent(selected)
@@ -486,16 +527,6 @@ class FunctionApp:
         root.destroy()
         ds.close_connection()
 
-    def select_file_or_folder(self, mode: str) -> List:
-        """Opens File Dialog Allowing Users To Select Files Or Folder"""
-
-        if mode == 'FILE':
-            return filedialog.askopenfilenames(title= "(*) Select File(s)")
-        elif mode == 'FOLDER':
-            return filedialog.askdirectory(title="(*) Select Folder")
-        else:
-            raise ValueError("Invalid Mode Chosen, Choose Between 'FILE', 'FOLDER'")
-    
     def choose_file_name(self, default:str) -> str:
         """Opens A Dialog For Saving A File"""
 

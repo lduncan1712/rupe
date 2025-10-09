@@ -76,16 +76,17 @@ def open_application(type: str) -> Any:
     return app
 
 def open_file(type: str, path: str, app: Any, read: bool) -> Any:
-    if type == "WORD":
-        file = app.Documents.Open(
+    try:
+        if type == "WORD":
+            file = app.Documents.Open(
                 path,
                 ReadOnly=read,
                 AddToRecentFiles=False,
                 ConfirmConversions=False,
                 Visible=False
-        )
-    elif type == "EXCEL":
-        file = app.Workbooks.Open(
+            )
+        elif type == "EXCEL":
+            file = app.Workbooks.Open(
                 path,
                 ReadOnly=read,
                 UpdateLinks=False,
@@ -94,15 +95,17 @@ def open_file(type: str, path: str, app: Any, read: bool) -> Any:
                 Notify=False,
                 CorruptLoad=0,  #2 IF NOT TABLE
                 Local=True
-        )
-    elif type == "PDF":
-        ... #
-    elif type == "JSON":
-        file = json.load(open(path, encoding="utf-8"))
-    elif type == "CSV":
-        file = open(path, 'r', encoding="utf-8")
-    else:
-        raise ValueError("Invalid Type" + type)
+            )
+        elif type == "PDF":
+            ... #
+        elif type == "JSON":
+            file = json.load(open(path, encoding="utf-8"))
+        elif type == "CSV":
+            file = open(path, 'r', encoding="utf-8")
+        else:
+            raise ValueError("Invalid Type" + type)
+    except Exception as e:
+        return None
     return file  
 
 def open_subfile(type: str, file: Any, subfile: Any) -> Any:
